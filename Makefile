@@ -1,5 +1,7 @@
 # Defines
 
+LLVM_VERSION = 3.9.1
+
 ifeq ($(OSTYPE),cygwin)
 	CLEANUP=rm -f
 	MKDIR=mkdir -p
@@ -14,9 +16,12 @@ else
 	TARGET_EXTENSION=out
 endif
 
-PATHU = ../Unity/src/
+PATHL = ../llvm/
+PATHU = ../Unity/
+PATHUS = $(PATHU)src/
 PATHS = src/
-PATHT = test/
+PATHT = unittest/
+PATHF = functional/
 PATHB = build/
 PATHD = build/depends/
 PATHO = build/objs/
@@ -24,33 +29,50 @@ PATHR = build/results/
 
 BUILD_PATHS = $(PATHB) $(PATHD) $(PATHO) $(PATHR)
 
-SRCT = $(wildcard $(PATHT)*.c)
-
 ifndef CC
 	CC = gcc
 endif
+ifndef CXX
+	CXX = g++
+endif
 
-COMPILE =	$(CC) -c
-LINK =		$(CC)
-CFLAGS =	-I. -I$(PATHU) -I$(PATHS) -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
-DEPEND =	$(CC) $(CFLAGS) -MM -MG -MF
-RESULTS =	$(patsubst $(PATHT)Test%.c,$(PATHR)Test%.txt,$(SRCT))
+SRCS =			$(wildcard $(PATHS)*.c)
+SRCT =			$(wildcard $(PATHT)*.c)
+LLVMCONFIG =	$(PATHL)bin/llvm-config
+COMPILE =		$(CC) -c
+LINK = 			$(CXX)
+CFLAGS =		-I. -I$(PATHU) -I$(PATHL)/include/ -I$(PATHS) -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
 
--include $(DEPEND)*
+LDFLAGS =		$(shell $(LLVMCONFIG) --ldflags)
+LDLIBS =		$(shell $(LLVMCONFIG) --libs core) -lpthread -ldl -ltinfo
 
+DEPEND =		$(CC) $(CFLAGS) -MM -MG -MF
+RESULTS =		$(patsubst $(PATHT)Test%.c,$(PATHR)Test%.txt,$(SRCT))
+OBJS =			$(patsubst $(PATHS)%.c,$(PATHO)%.o,$(SRCS))
+
+-include $(wildcard $(PATHD)*.txt)
+
+.PHONY: all
 .PHONY: clean
 .PHONY: test
+.PHONY: functionaltest
+.PHONY: unittest
 .PHONY: get-depends
 .PRECIOUS: $(PATHB)Test%.$(TARGET_EXTENSION)
 .PRECIOUS: $(PATHD)%.d
 .PRECIOUS: $(PATHO)%.o
-.PRECIOUS: $(PATHU)%.o
+.PRECIOUS: $(PATHUS)%.o
 .PRECIOUS: $(PATHR)%.txt
 
 
 # Rules
 
-test: $(BUILD_PATHS) $(RESULTS)
+all: unittest $(PATHB)lisp.$(TARGET_EXTENSION) functionaltest
+
+$(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS)
+	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
+
+unittest: $(BUILD_PATHS) $(RESULTS)
 	@echo "-----------------------\nIGNORES:\n-----------------------"
 	@echo `grep -s IGNORE $(PATHR)*.txt`
 	@echo "-----------------------\nFAILURES:\n-----------------------"
@@ -60,10 +82,12 @@ test: $(BUILD_PATHS) $(RESULTS)
 	@echo "\nDONE"
 	@exit `grep -c FAIL $(PATHR)*.txt`
 
+functionaltest: $(PATHB)lisp.$(TARGET_EXTENSION) 
+
 $(PATHR)%.txt: $(PATHB)%.$(TARGET_EXTENSION)
 	-./$< > $@ 2>&1
 
-$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHU)unity.o
+$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o
 	$(LINK) -o $@ $^
 
 $(PATHO)%.o:: $(PATHT)%.c
@@ -72,7 +96,7 @@ $(PATHO)%.o:: $(PATHT)%.c
 $(PATHO)%.o:: $(PATHS)%.c
 	$(COMPILE) $(CFLAGS) $< -o $@
 
-$(PATHU)%.o:: $(PATHU)%.c $(PATHU)%.h
+$(PATHUS)%.o:: $(PATHUS)%.c $(PATHUS)%.h
 	$(COMPILE) $(CFLAGS) $< -o $@ 
 
 $(PATHD)%.d:: $(PATHT)%.c
@@ -95,6 +119,10 @@ clean:
 	$(CLEANUP) $(PATHB)*.$(TARGET_EXTENSION)
 	$(CLEANUP) $(PATHR)*.txt
 
-get-depends:
+get-depends: $(PATHU) $(PATHL)
+
+$(PATHU):
 	cd .. && git clone https://github.com/ThrowTheSwitch/Unity.git
 
+$(PATHL):
+	./install_llvm.sh $(LLVM_VERSION)

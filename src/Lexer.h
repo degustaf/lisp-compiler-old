@@ -10,6 +10,7 @@ typedef enum {
     TOKEN_INTEGER,
     TOKEN_FLOAT,
     TOKEN_SYMBOL,
+    TOKEN_EOF,
 } token_type;
 
 typedef struct {
@@ -24,6 +25,5 @@ typedef struct {
 
 
 token gettok(FILE * input);
-token getnumtok(char sign, char first_digit, FILE *input);
 
 #endif /* LEXER_H */

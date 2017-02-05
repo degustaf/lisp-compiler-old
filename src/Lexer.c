@@ -5,12 +5,20 @@
 
 #include "Lexer.h"
 
+static token getnumtok(char sign, char first_digit, FILE *input);
+
 token gettok(FILE *input) {
     int last_char = getc(input);
-    token ret = {TOKEN_SYMBOL, {.c=last_char}};
+    token ret = {TOKEN_SYMBOL, {.c=0}};
 
     while(isspace(last_char)){
         last_char = getc(input);
+    }
+
+    if(last_char == EOF) {
+        ret.type = TOKEN_EOF;
+        ret.value.i = last_char;
+        return ret;
     }
 
     if(isalpha(last_char)) {
@@ -33,7 +41,6 @@ token gettok(FILE *input) {
             return getnumtok(prev, last_char, input);
         ungetc(last_char, input);
 
-        ret.type = TOKEN_SYMBOL;
         ret.value.c = prev;
         return ret;
     }
@@ -41,7 +48,6 @@ token gettok(FILE *input) {
     if(isdigit(last_char)) 
         return getnumtok(' ', last_char, input);
 
-    ret.type = TOKEN_SYMBOL;
     ret.value.c = last_char;
     return ret;
 }
@@ -50,7 +56,7 @@ int isodigit(int c) {
     return (c >= '0') && (c <= '7');
 }
 
-token getnumtok(char sign, char first_digit, FILE *input) {
+static token getnumtok(char sign, char first_digit, FILE *input) {
     char buffer[MAX_TOKEN_LENGTH] = "";
     token ret = {TOKEN_INTEGER, {.i=0}};
     int (*f)(int) = &isdigit;
