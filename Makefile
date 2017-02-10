@@ -41,7 +41,7 @@ SRCT =			$(wildcard $(PATHT)*.c)
 LLVMCONFIG =	$(PATHL)bin/llvm-config
 COMPILE =		$(CC) -c
 LINK = 			$(CXX)
-CFLAGS =		-I. -I$(PATHU) -I$(PATHL)/include/ -I$(PATHS) -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
+CFLAGS =		-I. -I$(PATHUS) -I$(PATHL)include/ -I$(PATHS) -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
 
 LDFLAGS =		$(shell $(LLVMCONFIG) --ldflags)
 LDLIBS =		$(shell $(LLVMCONFIG) --libs core) -lpthread -ldl -ltinfo

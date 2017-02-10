@@ -4,6 +4,9 @@
 #include "llvm-c/Types.h"
 
 typedef enum {
+    EOF_type,
+    DONE_type,
+    NOOP_type,
     INTEGER_type,
     FLOAT_type,
 } object_type;
