@@ -41,7 +41,7 @@ SRCT =			$(wildcard $(PATHT)*.c)
 LLVMCONFIG =	$(PATHL)bin/llvm-config
 COMPILE =		$(CC) -c
 LINK = 			$(CXX)
-CFLAGS =		-I. -I$(PATHUS) -I$(PATHL)include/ -I$(PATHS) -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
+CFLAGS =		-I. -I$(PATHUS) -I$(PATHL)include/ -I$(PATHS) -g -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
 
 LDFLAGS =		$(shell $(LLVMCONFIG) --ldflags)
 LDLIBS =		$(shell $(LLVMCONFIG) --libs core) -lpthread -ldl -ltinfo
@@ -87,8 +87,8 @@ functionaltest: $(PATHB)lisp.$(TARGET_EXTENSION)
 $(PATHR)%.txt: $(PATHB)%.$(TARGET_EXTENSION)
 	-./$< > $@ 2>&1
 
-$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o
-	$(LINK) -o $@ $^
+$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o $(PATHO)Reader.o
+	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 $(PATHO)%.o:: $(PATHT)%.c
 	$(COMPILE) $(CFLAGS) $< -o $@

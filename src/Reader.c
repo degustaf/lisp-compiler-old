@@ -6,9 +6,9 @@
 
 #include "Numbers.h"
 
-lisp_object EOF_lisp_object = {EOF_type, NULL};
-lisp_object DONE_lisp_object = {DONE_type, NULL};
-lisp_object NOOP_lisp_object = {NOOP_type, NULL};
+lisp_object EOF_lisp_object = {EOF_type, NULL, NULL};
+lisp_object DONE_lisp_object = {DONE_type, NULL, NULL};
+lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL};
 
 typedef lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
 static MacroFn macros[128];
@@ -20,6 +20,9 @@ static bool isTerminatingMacro(int ch);
 static lisp_object *ReadNumber(FILE *input, char ch);
 static char *ReadToken(FILE *input, char ch);
 static lisp_object *interpretToken(char *token);         // Needs to be implemented.
+
+// Macros
+static lisp_object *CharReader(FILE* input, char _ /* *lisp_object opts, *lisp_object pendingForms */);
 
 void init_macros() {
 }
@@ -60,6 +63,10 @@ lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRe
             }
         }
 
+        if(isdigit(ch)) {
+            return ReadNumber(input, ch);
+        }
+
         char* token = ReadToken(input, ch);
         lisp_object *ret = interpretToken(token);
         free(token);
@@ -90,7 +97,7 @@ static lisp_object* ReadNumber(FILE *input, char ch) {
     for(buffer[0] = ch; true; size *= 2) {
         for( ;i<size; i++) {
             int ch2 = getc(input);
-            if(ch == EOF || isspace(ch) || isMacro(ch)) {
+            if(ch2 == EOF || isspace(ch2) || isMacro(ch2)) {
                 char *endptr = NULL;
                 errno = 0;
                 buffer[i] = '\0';
@@ -136,4 +143,16 @@ static char *ReadToken(FILE *input, char ch) {
 
 static lisp_object *interpretToken(char *token) {
     return NULL;
+}
+
+static lisp_object *CharReader(FILE* input, char _ /* *lisp_object opts, *lisp_object pendingForms */) {
+    char ch = getc(input);
+    if(ch == EOF) {
+        return &EOF_lisp_object;
+    }
+
+    char *token = ReadToken(input, ch);
+    if(strlen(token) == 1) {
+
+    }
 }
