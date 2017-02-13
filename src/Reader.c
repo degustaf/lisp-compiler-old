@@ -1,16 +1,18 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "Reader.h"
 
 #include "Numbers.h"
+#include "Strings.h"
 
 lisp_object EOF_lisp_object = {EOF_type, NULL, NULL};
 lisp_object DONE_lisp_object = {DONE_type, NULL, NULL};
 lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL};
 
-typedef lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
+typedef lisp_object* (*MacroFn)(FILE* /* *lisp_object opts, *lisp_object pendingForms */);
 static MacroFn macros[128];
 
 // Static Function Declarations.
@@ -22,9 +24,11 @@ static char *ReadToken(FILE *input, char ch);
 static lisp_object *interpretToken(char *token);         // Needs to be implemented.
 
 // Macros
-static lisp_object *CharReader(FILE* input, char _ /* *lisp_object opts, *lisp_object pendingForms */);
+static lisp_object *CharReader(FILE* input /* *lisp_object opts, *lisp_object pendingForms */);
+static lisp_object *StringReader(FILE* input /* *lisp_object opts, *lisp_object pendingForms */);
 
 void init_macros() {
+    macros['\\'] = &CharReader;
 }
 
 lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
@@ -48,7 +52,7 @@ lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRe
     
         MacroFn macro = get_macro(ch);
         if(macro) {
-            lisp_object *ret = (*macro)(input, ch);
+            lisp_object *ret = (*macro)(input);
             if(ret->type == NOOP_type) {
                 continue;
             }
@@ -145,14 +149,77 @@ static lisp_object *interpretToken(char *token) {
     return NULL;
 }
 
-static lisp_object *CharReader(FILE* input, char _ /* *lisp_object opts, *lisp_object pendingForms */) {
+static lisp_object *CharReader(FILE* input /* *lisp_object opts, *lisp_object pendingForms */) {
     char ch = getc(input);
     if(ch == EOF) {
+        fprintf(stderr, "EOF while reading character");
         return &EOF_lisp_object;
     }
 
     char *token = ReadToken(input, ch);
-    if(strlen(token) == 1) {
+    if(strlen(token) == 1)
+        return (lisp_object*)NewChar(token[0]);
+    if(strcmp(token, "newline") == 0)
+        return (lisp_object*)NewChar('\n');
+    if(strcmp(token, "space") == 0)
+        return (lisp_object*)NewChar(' ');
+    if(strcmp(token, "tab") == 0)
+        return (lisp_object*)NewChar('\t');
+    if(strcmp(token, "backspace") == 0)
+        return (lisp_object*)NewChar('\b');
+    if(strcmp(token, "formfeed") == 0)
+        return (lisp_object*)NewChar('\f');
+    if(strcmp(token, "return") == 0)
+        return (lisp_object*)NewChar('\r');
 
+    fprintf(stderr, "Unsupported character: \\%s", token);
+    return NULL;
+}
+
+static lisp_object *StringReader(FILE* input /* *lisp_object opts, *lisp_object pendingForms */) {
+    size_t size = 256;
+    size_t i = 0;
+    char *str = malloc(size * sizeof(*str));
+
+    for(int ch = getc(input); ch != '"'; ch = getc(input)) {
+        if(ch == EOF) {
+            fprintf(stderr, "EOF while reading string.");
+            return &EOF_lisp_object;
+        }
+        if(ch == '\\') {
+            ch = getc(input);
+            if(ch == EOF) {
+                fprintf(stderr, "EOF while reading string.");
+                return &EOF_lisp_object;
+            }
+
+            switch(ch) {
+            case 't':
+                ch = '\t';
+                break;
+            case 'r':
+                ch = '\r';
+                break;
+            case 'n':
+                ch = '\n';
+                break;
+            case 'b':
+                ch = '\b';
+                break;
+            case 'f':
+                ch = '\f';
+                break;
+            case '\\':
+            case '"':
+                break;
+            default:
+                fprintf(stderr, "Unsupported Escape character: \\%c", ch);
+            }
+        }
+        if(i + 1 == size) {
+            // Grow str.
+        }
+        str[i++] = ch;
     }
+    return (lisp_object*)NewString(str);
 }

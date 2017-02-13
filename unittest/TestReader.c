@@ -61,8 +61,7 @@ void test_read_integer(void) {
         struct test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
-        char * (*f)(lisp_object *) = ret->toString;
-        char *result = (*f)(ret);
+        char *result = (*ret->toString)(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
         fclose(stream);
     }
@@ -117,8 +116,23 @@ void test_read_float(void) {
         struct test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
-        char * (*f)(lisp_object *) = ret->toString;
-        char *result = (*f)(ret);
+        char *result = (*ret->toString)(ret);
+        TEST_ASSERT_EQUAL_STRING(d->expected, result);
+        fclose(stream);
+    }
+}
+
+void test_read_char(void) {
+    struct test_data data[] = {
+        { "\\newline", "\n"},
+    };
+    size_t count = sizeof(data)/sizeof(data[0]);
+
+    for(size_t i=0; i<count; i++) {
+        struct test_data *d = &(data[i]);
+        FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+        lisp_object *ret = read(stream, false, '\0');
+        char *result = (*ret->toString)(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
         fclose(stream);
     }
@@ -128,5 +142,6 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_read_integer);
     RUN_TEST(test_read_float);
+    RUN_TEST(test_read_char);
     return UNITY_END();
 }

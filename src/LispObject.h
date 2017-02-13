@@ -8,6 +8,7 @@ typedef enum {
     DONE_type,
     NOOP_type,
     CHAR_TYPE,
+    STRING_TYPE,
     INTEGER_type,
     FLOAT_type,
     LIST_TYPE,

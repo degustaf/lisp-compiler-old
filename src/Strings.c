@@ -1,3 +1,6 @@
+#include <stdlib.h>
+#include <string.h>
+
 #include "Strings.h"
 
 struct char_struct {
@@ -24,4 +27,33 @@ Char *NewChar(char ch) {
 
     ret->val[0] = ch;
     ret->val[1] = '\0';
+
+    return ret;
+}
+
+struct string_struct {
+    lisp_object obj;
+    char *str;
+};
+
+char *StringToString(lisp_object *obj) {
+    String *str = (String*)obj;
+    return str->str;
+}
+
+LLVMValueRef String_codegen(lisp_object *obj) {
+    return NULL;
+}
+
+String *NewString(char *str) {
+    String *ret =malloc(sizeof(*ret));
+    memset(ret, 0, sizeof(*ret));
+
+    ret->obj.type = STRING_TYPE;
+    ret->obj.codegen = &String_codegen;
+    ret->obj.toString = &StringToString;
+
+    ret->str = str;
+
+    return ret;
 }

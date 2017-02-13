@@ -87,7 +87,10 @@ functionaltest: $(PATHB)lisp.$(TARGET_EXTENSION)
 $(PATHR)%.txt: $(PATHB)%.$(TARGET_EXTENSION)
 	-./$< > $@ 2>&1
 
-$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o $(PATHO)Reader.o
+$(PATHB)TestReader.$(TARGET_EXTENSION): $(PATHO)TestReader.o $(PATHO)Reader.o $(PATHUS)unity.o $(PATHO)Numbers.o $(PATHO)Strings.o
+	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
+
+$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 $(PATHO)%.o:: $(PATHT)%.c

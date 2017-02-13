@@ -7,6 +7,7 @@
 static void HandleTopLevelExpression(lisp_object *const current);
 
 void repl(FILE *input) {
+    init_macros();
     for(;;) {
         printf("Lisp>");
         lisp_object *current = read(input, false, '\0');
@@ -23,6 +24,6 @@ void repl(FILE *input) {
 
 static void HandleTopLevelExpression(lisp_object *const current) {
     if(current) {
-        printf("Parsed a top level expression.\n");
+        printf("Parsed a top level expression: %s.\n", (*current->toString)(current));
     }
 }
