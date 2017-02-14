@@ -29,6 +29,7 @@ static lisp_object *StringReader(FILE* input /* *lisp_object opts, *lisp_object 
 
 void init_macros() {
     macros['\\'] = &CharReader;
+    macros['"']  = &StringReader;
 }
 
 lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
@@ -135,8 +136,9 @@ static char *ReadToken(FILE *input, char ch) {
     for(buffer[0] = ch; true; size *= 2) {
         for( ;i<size; i++) {
             int ch2 = getc(input);
-            if(ch == EOF || isspace(ch) || isTerminatingMacro(ch)) {
-                ungetc(ch, input);
+            if(ch2 == EOF || isspace(ch2) || isTerminatingMacro(ch2)) {
+                ungetc(ch2, input);
+                buffer[i] = '\0';
                 return buffer;
             }
             buffer[i] = ch2;
@@ -217,7 +219,13 @@ static lisp_object *StringReader(FILE* input /* *lisp_object opts, *lisp_object 
             }
         }
         if(i + 1 == size) {
-            // Grow str.
+            size *= 2;
+            void *ptr = realloc(str, size);
+            if(ptr == NULL) {
+                fprintf(stderr, "Error: %s", strerror(errno));
+                return &DONE_lisp_object;
+            }
+            str = ptr;
         }
         str[i++] = ch;
     }
