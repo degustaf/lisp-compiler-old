@@ -6,7 +6,7 @@
 typedef struct List_struct List;
 
 const List *NewList(const lisp_object *const first);
-const List *CreateList(lisp_object **entries, size_t count);
+const List *CreateList(size_t count, lisp_object **entries);
 
 const List *const EmptyList;
 

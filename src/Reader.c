@@ -5,6 +5,7 @@
 
 #include "Reader.h"
 
+#include "List.h"
 #include "Numbers.h"
 #include "Strings.h"
 
@@ -22,14 +23,17 @@ static bool isTerminatingMacro(int ch);
 static lisp_object *ReadNumber(FILE *input, char ch);
 static char *ReadToken(FILE *input, char ch);
 static lisp_object *interpretToken(char *token);         // Needs to be implemented.
+static lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */);
 
 // Macros
 static lisp_object *CharReader(FILE* input /* *lisp_object opts, *lisp_object pendingForms */);
 static lisp_object *StringReader(FILE* input /* *lisp_object opts, *lisp_object pendingForms */);
+static lisp_object *ListReader(FILE* input /* *lisp_object opts, *lisp_object pendingForms */);
 
 void init_macros() {
     macros['\\'] = &CharReader;
     macros['"']  = &StringReader;
+    macros['(']  = &ListReader;
 }
 
 lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
@@ -218,16 +222,39 @@ static lisp_object *StringReader(FILE* input /* *lisp_object opts, *lisp_object 
                 fprintf(stderr, "Unsupported Escape character: \\%c", ch);
             }
         }
-        if(i + 1 == size) {
+        if(i == size) {
             size *= 2;
-            void *ptr = realloc(str, size);
-            if(ptr == NULL) {
-                fprintf(stderr, "Error: %s", strerror(errno));
-                return &DONE_lisp_object;
-            }
-            str = ptr;
+            str = realloc(str, size);
         }
         str[i++] = ch;
     }
     return (lisp_object*)NewString(str);
+}
+
+static lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
+    size_t size = 8;
+    size_t i = 0;
+    lisp_object **ret = malloc(size * sizeof(*ret));
+
+    while(true) {
+        lisp_object *form = read(input, true, delim);
+        if(form == &EOF_lisp_object) return NULL;
+        if(form == &DONE_lisp_object) {
+            *count = i;
+            return ret;
+        }
+        if(size == i) {
+            size *= 2;
+            ret = realloc(ret, size);
+        }
+        ret[i++] = form;
+    }
+}
+
+static lisp_object *ListReader(FILE* input /* *lisp_object opts, *lisp_object pendingForms */) {
+    size_t count;
+    lisp_object **list = ReadDelimitedList(input, ')', &count);
+    if(list == NULL) return &EOF_lisp_object;
+    if(count == 0) return (lisp_object*)EmptyList;
+    return (lisp_object*)CreateList(count, list);
 }

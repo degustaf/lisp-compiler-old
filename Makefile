@@ -78,16 +78,16 @@ unittest: $(BUILD_PATHS) $(RESULTS)
 	@echo "-----------------------\nFAILURES:\n-----------------------"
 	@echo `grep -s FAIL $(PATHR)*.txt`
 	@echo "-----------------------\nPASSES:\n-----------------------"
-	@echo `grep -c PASS $(PATHR)*.txt` tests passed.
+	@echo `cat $(PATHR)*.txt | grep -c PASS` tests passed.
 	@echo "\nDONE"
-	@exit `grep -c FAIL $(PATHR)*.txt`
+	@exit `cat $(PATHR)*.txt | grep -c FAIL`
 
 functionaltest: $(PATHB)lisp.$(TARGET_EXTENSION) 
 
 $(PATHR)%.txt: $(PATHB)%.$(TARGET_EXTENSION)
 	-./$< > $@ 2>&1
 
-$(PATHB)TestReader.$(TARGET_EXTENSION): $(PATHO)TestReader.o $(PATHO)Reader.o $(PATHUS)unity.o $(PATHO)Numbers.o $(PATHO)Strings.o
+$(PATHB)TestReader.$(TARGET_EXTENSION): $(PATHO)TestReader.o $(PATHO)Reader.o $(PATHUS)unity.o $(PATHO)Numbers.o $(PATHO)Strings.o $(PATHO)List.o
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 $(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o
