@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -5,6 +6,7 @@
 
 char *EmptyListToString(lisp_object *obj);
 LLVMValueRef List_codegen(struct lisp_object_struct *obj);
+lisp_object *ListCopy(lisp_object *obj);
 
 struct List_struct {
     lisp_object obj;
@@ -13,7 +15,7 @@ struct List_struct {
     const size_t _count;
 };
     
-const List _EmptyList = {{LIST_TYPE, &List_codegen, &EmptyListToString}, NULL, NULL, 0};
+const List _EmptyList = {{LIST_TYPE, &List_codegen, &EmptyListToString, &ListCopy}, NULL, NULL, 0};
 const List *const EmptyList = &_EmptyList;
 const char *const EmptyListString = "()";
 
@@ -26,6 +28,7 @@ char *EmptyListToString(lisp_object *obj) {
 }
 
 char *ListToString(lisp_object *obj) {
+    assert(obj->type == LIST_TYPE);
     size_t buffer_size = 256;
     char *buffer = malloc(buffer_size * sizeof(*buffer));
     size_t size = 1;
@@ -52,11 +55,27 @@ char *ListToString(lisp_object *obj) {
     return buffer;
 }
 
+lisp_object *ListCopy(lisp_object *obj) {
+    assert(obj->type == LIST_TYPE);
+    List *list = (List*)obj;
+    size_t count = list->_count;
+    lisp_object **arr = malloc(count * sizeof(*arr));
+    for(size_t i=0; i<count; i++) {
+        const lisp_object *const o = list->_first;
+        list = (List*)list->_rest;
+        arr[i] = (*(o->copy))((lisp_object*)o);
+    }
+    return (lisp_object*)CreateList(count, arr);
+}
+
 const List *NewList(const lisp_object *const first) {
     List *ret = malloc(sizeof(*ret));
     if(ret == NULL) return NULL;
 
-    List _ret = {{LIST_TYPE, &List_codegen, &ListToString}, first, EmptyList, 1};
+    List _ret = {{LIST_TYPE, &List_codegen, &ListToString, &ListCopy},
+                 first,
+                 EmptyList,
+                 1};
     memcpy(ret, &_ret, sizeof(*ret));
 
     return ret;
@@ -65,7 +84,7 @@ const List *NewList(const lisp_object *const first) {
 const List *CreateList(size_t count, lisp_object **entries) {
     List *ret = (List*)EmptyList;
     for(size_t i = 1; i <= count; i++) {
-        List _ret = {{LIST_TYPE, &List_codegen, &ListToString},
+        List _ret = {{LIST_TYPE, &List_codegen, &ListToString, &ListCopy},
                      entries[count-i],
                      ret,
                      i};

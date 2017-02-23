@@ -9,9 +9,9 @@
 #include "Numbers.h"
 #include "Strings.h"
 
-lisp_object EOF_lisp_object = {EOF_type, NULL, NULL};
-lisp_object DONE_lisp_object = {DONE_type, NULL, NULL};
-lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL};
+lisp_object EOF_lisp_object = {EOF_type, NULL, NULL, NULL};
+lisp_object DONE_lisp_object = {DONE_type, NULL, NULL, NULL};
+lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL, NULL};
 
 typedef lisp_object* (*MacroFn)(FILE* /* *lisp_object opts, *lisp_object pendingForms */);
 static MacroFn macros[128];
