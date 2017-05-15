@@ -1,5 +1,6 @@
-
 #include "Repl.h"
+
+#include <assert.h>
 
 #include "LispObject.h"
 #include "Reader.h"
@@ -11,14 +12,16 @@ void repl(FILE *input) {
     for(;;) {
         printf("Lisp>");
         lisp_object *current = read(input, false, '\0');
-        switch(current->type) {
+		assert(current);
+		switch(current->type) {
             case EOF_type:
+			case ERROR_type:
                 printf("\n");
                 return;
             default:
                 HandleTopLevelExpression(current);
                 break;
-        }
+		}
     }
 }
 

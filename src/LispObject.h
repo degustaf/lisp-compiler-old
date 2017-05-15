@@ -1,23 +1,61 @@
 #ifndef LISP_OBJECT_H
 #define LISP_OBJECT_H
 
+#include "stddef.h"
+
 #include "llvm-c/Types.h"
 
+// These can be extracted out of this file to a seperate hesader if needed for another enum.
+#define GENERATE_ENUM(ENUM) ENUM,
+#define GENERATE_STRING(ENUM) #ENUM,
+
+#define FOREACH_TYPE(TYPE) \
+	TYPE(EOF_type) \
+	TYPE(ERROR_type) \
+    TYPE(DONE_type) \
+    TYPE(NOOP_type) \
+    TYPE(CHAR_type) \
+    TYPE(STRING_type) \
+    TYPE(INTEGER_type) \
+    TYPE(FLOAT_type) \
+    TYPE(LIST_type) \
+	TYPE(CONS_type) \
+\
+	/* Map types. */ \
+	TYPE(BMI_NODE_type) \
+	TYPE(ARRAY_NODE_type) \
+	TYPE(NODESEQ_type) \
+	TYPE(HASHMAP_type) \
+	TYPE(TRANSIENTHASHMAP_type)
+
+
 typedef enum {
-    EOF_type,
-    DONE_type,
-    NOOP_type,
-    CHAR_TYPE,
-    STRING_TYPE,
-    INTEGER_type,
-    FLOAT_type,
-    LIST_TYPE,
+	FOREACH_TYPE(GENERATE_ENUM)
 } object_type;
+
+static const char *object_type_string[] __attribute__((unused)) = {
+	FOREACH_TYPE(GENERATE_STRING)
+} ;
+
+typedef struct Seqable_vtable_struct Seqable_vtable;
+typedef struct ICollection_vtable_struct ICollection_vtable;
+typedef struct ISeq_vtable_struct ISeq_vtable;
+typedef struct IMap_vtable_struct IMap_vtable;
+
+typedef struct {
+	Seqable_vtable *SeqableFns;
+	ICollection_vtable *ICollectionFns;
+	ISeq_vtable *ISeqFns;
+	IMap_vtable *IMapFns;
+} interfaces;
+
+static const interfaces NullInterface = {NULL, NULL, NULL, NULL};
 
 typedef struct lisp_object_struct {
     object_type type;
-    LLVMValueRef (*codegen)(struct lisp_object_struct *);
-    char* (*toString)(struct lisp_object_struct *);
+    LLVMValueRef (*codegen)(const struct lisp_object_struct *);
+	const char *(*toString)(const struct lisp_object_struct *);
+	const interfaces *fns;
 } lisp_object;
 
 #endif /* LISP_OBJECT_H */

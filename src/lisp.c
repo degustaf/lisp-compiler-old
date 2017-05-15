@@ -12,8 +12,8 @@ void cmd_line_err(void) {
 
 int main(int argc, char **argv) {
     int c;
-    char *out_file = "a.out";
-    LLVMContextRef context = LLVMContextCreate();
+    __attribute__((unused)) char *out_file = "a.out";
+    __attribute__((unused)) LLVMContextRef context = LLVMContextCreate();
 
     while((c = getopt(argc, argv, ":o:")) != -1) {
         switch(c) {

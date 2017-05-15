@@ -3,6 +3,7 @@
 #include "unity.h"
 
 #include "List.h"
+#include "Util.h"
 
 typedef struct test_data {
     char *input;
@@ -17,7 +18,7 @@ void tearDown(void) {
 
 void test_EmptyList_toString(void) {
     lisp_object *obj = (lisp_object*)EmptyList;
-    TEST_ASSERT_EQUAL_STRING("()", (*(obj->toString))(obj));
+    TEST_ASSERT_EQUAL_STRING("()", toString(obj));
 }
 
 int main(void) {

@@ -1,10 +1,41 @@
+#include "List.h"
+
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "List.h"
+#include "ASeq.h"
+#include "Interfaces.h"
+#include "Util.h"
 
-char *EmptyListToString(lisp_object *obj);
-LLVMValueRef List_codegen(struct lisp_object_struct *obj);
+static LLVMValueRef List_codegen(const struct lisp_object_struct *obj);
+static const char *toStringEmptyList(const lisp_object *obj);
+static const lisp_object* firstList(const ISeq*);
+static const ISeq* nextList(const ISeq*);
+
+Seqable_vtable List_Seqable_vtable = {
+	seqASeq // seq
+};
+
+ICollection_vtable List_ICollection_vtable = {
+	NULL, // count	// TODO
+	emptyASeq, // empty
+	EquivASeq  // Equiv
+};
+
+ISeq_vtable List_ISeq_vtable = {
+	firstList, // first
+	nextList, // next
+	moreASeq, // more
+	NULL, // cons	// TODO
+};
+
+interfaces List_interfaces = {
+	&List_Seqable_vtable, // Seqable_vtable
+	&List_ICollection_vtable,	//ICollection_vtable
+	&List_ISeq_vtable, // ISeq_vtable
+	NULL
+};
 
 struct List_struct {
     lisp_object obj;
@@ -13,50 +44,23 @@ struct List_struct {
     const size_t _count;
 };
     
-const List _EmptyList = {{LIST_TYPE, &List_codegen, &EmptyListToString}, NULL, NULL, 0};
+const List _EmptyList = {{LIST_type, List_codegen, toStringEmptyList, &List_interfaces}, NULL, NULL, 0};
 const List *const EmptyList = &_EmptyList;
-const char *const EmptyListString = "()";
 
-LLVMValueRef List_codegen(struct lisp_object_struct *obj) {
+static LLVMValueRef List_codegen(__attribute__((unused)) const struct lisp_object_struct *obj) {
     return NULL;
 }
 
-char *EmptyListToString(lisp_object *obj) {
-    return (char*)EmptyListString;
-}
-
-char *ListToString(lisp_object *obj) {
-    size_t buffer_size = 256;
-    char *buffer = malloc(buffer_size * sizeof(*buffer));
-    size_t size = 1;
-
-    buffer[0] = '(';
-    buffer[1] = '\0';
-
-    for(const List *list = (List*)obj; list != EmptyList; list = list->_rest) {
-        const lisp_object *o = list->_first;
-        char *str = o->toString((lisp_object*)o);
-        size_t len = strlen(str);
-        size_t growth;
-        for(growth = 1; size + len + 2 >= growth * buffer_size; growth *= 2);
-        if(growth > 1) {
-            buffer_size *= growth;
-            buffer = realloc(buffer, buffer_size * sizeof(*buffer));
-        }
-        strncpy(buffer, str, len+1);
-        buffer[size++] = ' ';
-        size += len + 1;
-    }
-    buffer[size++] = ')';
-    buffer[size] = '\0';
-    return buffer;
+static const char *toStringEmptyList(const lisp_object *obj) {
+	assert((void*)obj == (void*)EmptyList);
+	return "()";
 }
 
 const List *NewList(const lisp_object *const first) {
     List *ret = malloc(sizeof(*ret));
     if(ret == NULL) return NULL;
 
-    List _ret = {{LIST_TYPE, &List_codegen, &ListToString}, first, EmptyList, 1};
+    List _ret = {{LIST_type, List_codegen, toString, &List_interfaces}, first, EmptyList, 1};
     memcpy(ret, &_ret, sizeof(*ret));
 
     return ret;
@@ -65,7 +69,7 @@ const List *NewList(const lisp_object *const first) {
 const List *CreateList(size_t count, lisp_object **entries) {
     List *ret = (List*)EmptyList;
     for(size_t i = 1; i <= count; i++) {
-        List _ret = {{LIST_TYPE, &List_codegen, &ListToString},
+        List _ret = {{LIST_type, List_codegen, toString, &List_interfaces},
                      entries[count-i],
                      ret,
                      i};
@@ -73,4 +77,19 @@ const List *CreateList(size_t count, lisp_object **entries) {
         memcpy(ret, &_ret, sizeof(*ret));
     }
     return ret;
+}
+
+static const lisp_object* firstList(const ISeq *is) {
+	assert(is->obj.type == LIST_type);
+	const List *l = (List*) is;
+
+	return l->_first;
+}
+
+static const ISeq* nextList(const ISeq *is) {
+	assert(is->obj.type == LIST_type);
+	const List *l = (List*) is;
+
+	if(l->_count == 1) return NULL;
+	return (ISeq*) l->_rest;
 }

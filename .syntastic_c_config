@@ -1,1 +1,10 @@
--I../unity/src/
+-I../Unity/src/
+-I../llvm/include/
+-Isrc/
+-g
+-DTEST
+-Wall
+-Wextra
+-pedantic
+-std=c99
+-D_POSIX_C_SOURCE=200809L

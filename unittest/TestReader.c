@@ -3,6 +3,7 @@
 #include "unity.h"
 
 #include "Reader.h"
+#include "Util.h"
 
 typedef struct test_data {
     char *input;
@@ -55,6 +56,7 @@ void test_read_integer(void) {
         { "0x1FFFFFFF", "536870911"},
         { "+0x1FFFFFFF", "536870911"},
         { "-0x20000000", "-536870912"},
+		{ "1)", "1"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
 
@@ -62,7 +64,7 @@ void test_read_integer(void) {
         struct test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
-        char *result = (*ret->toString)(ret);
+        const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
         fclose(stream);
     }
@@ -117,7 +119,7 @@ void test_read_float(void) {
         struct test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
-        char *result = (*ret->toString)(ret);
+        const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
         fclose(stream);
     }
@@ -222,6 +224,7 @@ void test_read_char(void) {
         { "\\|", "|"},
         { "\\}", "}"},
         { "\\~", "~"},
+        { "\\\\a", "Unsupported character: \\\\a"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
 
@@ -229,7 +232,7 @@ void test_read_char(void) {
         struct test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
-        char *result = (*ret->toString)(ret);
+        const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
         fclose(stream);
     }
@@ -238,6 +241,7 @@ void test_read_char(void) {
 void test_read_string(void) {
     struct test_data data[] = {
         { "\"string\"", "string"},
+        { "\"before\\tafter\"", "before\tafter"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
 
@@ -245,7 +249,7 @@ void test_read_string(void) {
         struct test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
-        char *result = (*ret->toString)(ret);
+        const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
         fclose(stream);
     }
@@ -254,14 +258,52 @@ void test_read_string(void) {
 void test_read_list(void) {
     struct test_data data[] = {
         { "()", "()"},
+        { "(1)", "(1)"},
+        { "(1 2)", "(1 2)"},
+        { "(1 2 3)", "(1 2 3)"},
+        { "(1 2 3 (1 2 3))", "(1 2 3 (1 2 3))"},
+        { "(1 2 3 \"string\" \\a)", "(1 2 3 string a)"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
+	char err[256] = "";
 
     for(size_t i=0; i<count; i++) {
         struct test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
-        char *result = (*ret->toString)(ret);
+		snprintf(err, 256, "Expected List type.  Got %s.", object_type_string[ret->type]);
+		TEST_ASSERT_MESSAGE(ret->type == LIST_type, err);
+        const char *result = toString(ret);
+        TEST_ASSERT_EQUAL_STRING(d->expected, result);
+        fclose(stream);
+    }
+}
+
+void test_read_map(void) {
+    struct test_data data[] = {
+        { "{}", "{}"},
+        { "{1 2}", "{1 2}"},
+        { "{1 2 3 4}", "{1 2, 3 4}"},
+        { "{1 2 3 4 5 6}", "{1 2, 3 4, 5 6}"},
+        { "{1 2 3 4 5 6 7 8}", "{7 8, 1 2, 3 4, 5 6}"},
+        { "{1 2 3 4 5 6 7 8 9 10}", "{7 8, 1 2, 3 4, 5 6 9 10}"},
+    };
+    size_t count = sizeof(data)/sizeof(data[0]);
+	char err[256] = "";
+
+    for(size_t i=0; i<count; i++) {
+        struct test_data *d = &(data[i]);
+        FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+		printf("Got stream.\n");
+		fflush(stdout);
+        lisp_object *ret = read(stream, false, '\0');
+		printf("Got ret.\n");
+		fflush(stdout);
+		snprintf(err, 256, "Expected Map type.  Got %s.", object_type_string[ret->type]);
+		TEST_ASSERT_MESSAGE(ret->type == HASHMAP_type, err);
+        const char *result = toString(ret);
+		printf("Got result.\n");
+		fflush(stdout);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
         fclose(stream);
     }
@@ -269,10 +311,11 @@ void test_read_list(void) {
 
 int main(void) {
     UNITY_BEGIN();
-    RUN_TEST(test_read_integer);
-    RUN_TEST(test_read_float);
-    RUN_TEST(test_read_char);
-    RUN_TEST(test_read_string);
-    RUN_TEST(test_read_list);
+    // RUN_TEST(test_read_integer);
+    // RUN_TEST(test_read_float);
+    // RUN_TEST(test_read_char);
+    // RUN_TEST(test_read_string);
+    // RUN_TEST(test_read_list);
+    RUN_TEST(test_read_map);
     return UNITY_END();
 }

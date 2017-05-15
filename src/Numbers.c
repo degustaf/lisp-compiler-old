@@ -13,12 +13,12 @@ struct Integer_struct {
     char *str;
 };
 
-LLVMValueRef Integer_codegen(lisp_object *obj) {
+static LLVMValueRef Integer_codegen(const lisp_object *obj) {
     Integer *int_obj = (Integer*)obj;
     return LLVMConstInt(LLVMInt64Type(), (unsigned long) int_obj->val, (LLVMBool)1);
 }
 
-char *IntegerToString(lisp_object *obj) {
+static const char *IntegerToString(const lisp_object *obj) {
     Integer *IntObj = (Integer*)obj;
     if(IntObj->str == NULL) {
         int size = snprintf(NULL, 0, "%ld", IntObj->val);
@@ -35,8 +35,9 @@ Integer *NewInteger(long i) {
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = INTEGER_type;
-    ret->obj.codegen = &Integer_codegen;
-    ret->obj.toString = &IntegerToString;
+    ret->obj.codegen = Integer_codegen;
+	ret->obj.toString = IntegerToString;
+	ret->obj.fns = &NullInterface;
 
     ret->val = i;
 
@@ -53,12 +54,12 @@ struct Float_struct {
     char *str;
 };
 
-LLVMValueRef Float_codegen(lisp_object *obj) {
+static LLVMValueRef Float_codegen(const lisp_object *obj) {
     Float *flt_obj = (Float*)obj;
     return LLVMConstReal(LLVMDoubleType(), flt_obj->val);
 }
 
-char *FloatToString(lisp_object *obj) {
+static const char *FloatToString(const lisp_object *obj) {
     Float *FltObj = (Float*)obj;
     if(FltObj->str == NULL) {
         int size = snprintf(NULL,0, "%g", FltObj->val);
@@ -75,8 +76,9 @@ Float *NewFloat(double x) {
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = FLOAT_type;
-    ret->obj.codegen = &Float_codegen;
-    ret->obj.toString = &FloatToString;
+    ret->obj.codegen = Float_codegen;
+	ret->obj.toString = FloatToString;
+	ret->obj.fns = &NullInterface;
 
     ret->val = x;
 
