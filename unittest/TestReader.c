@@ -279,6 +279,34 @@ void test_read_list(void) {
     }
 }
 
+void test_read_vector(void) {
+    struct test_data data[] = {
+        { "[]", "[]"},
+        { "[1]", "[1]"},
+        { "[1 2]", "[1 2]"},
+        { "[1 2 3]", "[1 2 3]"},
+		{ "[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32]", 
+			"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32]"},
+		{ "[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33]", 
+			"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33]"},
+		{"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]",
+			"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]"},
+    };
+    size_t count = sizeof(data)/sizeof(data[0]);
+	char err[256] = "";
+
+    for(size_t i=0; i<count; i++) {
+        struct test_data *d = &(data[i]);
+        FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+        lisp_object *ret = read(stream, false, '\0');
+		snprintf(err, 256, "Expected Vector type.  Got %s.", object_type_string[ret->type]);
+		TEST_ASSERT_MESSAGE(ret->type == VECTOR_type, err);
+        const char *result = toString(ret);
+        TEST_ASSERT_EQUAL_STRING(d->expected, result);
+        fclose(stream);
+    }
+}
+
 void test_read_map(void) {
     struct test_data data[] = {
         { "{}", "{}"},
@@ -286,7 +314,7 @@ void test_read_map(void) {
         { "{1 2 3 4}", "{1 2, 3 4}"},
         { "{1 2 3 4 5 6}", "{1 2, 3 4, 5 6}"},
         { "{1 2 3 4 5 6 7 8}", "{7 8, 1 2, 3 4, 5 6}"},
-        // { "{1 2 3 4 5 6 7 8 9 10}", "{7 8, 1 2, 3 4, 5 6 9 10}"},
+        // { "{1 2 3 4 5 6 7 8 9 10}", "{7 8, 1 2, 3 4, 5 6, 9 10}"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
 	char err[256] = "";
@@ -316,6 +344,7 @@ int main(void) {
     RUN_TEST(test_read_char);
     RUN_TEST(test_read_string);
     RUN_TEST(test_read_list);
+    RUN_TEST(test_read_vector);
     RUN_TEST(test_read_map);
     return UNITY_END();
 }

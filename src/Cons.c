@@ -38,8 +38,11 @@ ISeq_vtable Cons_ISeq_vtable = {
 
 interfaces Cons_interfaces = {
 	&Cons_Seqable_vtable,		// SeqableFns
+	NULL,						// ReversibleFns
 	&Cons_ICollection_vtable,	// ICollectionFns
+	NULL,						// IStackFns
 	&Cons_ISeq_vtable,			// ISeqFns
+	NULL,						// IVectorFns
 	NULL,						// IMapFns
 };
 

@@ -142,10 +142,13 @@ ISeq_vtable NodeSeq_ISeq_vtable = {
 };
 
 interfaces NodeSeq_interfaces = {
-	&NodeSeq_Seqable_vtable,	// SeqableFns
+	&NodeSeq_Seqable_vtable,		// SeqableFns
+	NULL,							// ReversibleFns
 	&NodeSeq_ICollection_vtable,	// ICollectionFns
-	&NodeSeq_ISeq_vtable,	// ISeqFns
-	NULL,	// IMapFns
+	NULL,							// IStackFns
+	&NodeSeq_ISeq_vtable,			// ISeqFns
+	NULL,							// IVectorFns
+	NULL,							// IMapFns
 };
 
 // TransientHashMap
@@ -204,8 +207,11 @@ IMap_vtable HashMap_IMap_vtable = {
 
 interfaces HashMap_interfaces = {
 	&HashMap_Seqable_vtable,		// SeqableFns
+	NULL,							// ReversibleFns
 	&HashMap_ICollection_vtable,	// ICollectionFns
+	NULL,							// IStackFns
 	NULL,							// ISeqFns
+	NULL,							// IVectorFns
 	&HashMap_IMap_vtable,			// IMapFns
 };
 

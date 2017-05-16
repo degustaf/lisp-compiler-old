@@ -42,18 +42,24 @@ static const char *object_type_string[] __attribute__((unused)) = {
 } ;
 
 typedef struct Seqable_vtable_struct Seqable_vtable;
+typedef struct Reversible_vtable_struct Reversible_vtable;
 typedef struct ICollection_vtable_struct ICollection_vtable;
+typedef struct IStack_vtable_struct IStack_vtable;
 typedef struct ISeq_vtable_struct ISeq_vtable;
+typedef struct IVector_vtable_struct IVector_vtable;
 typedef struct IMap_vtable_struct IMap_vtable;
 
 typedef struct {
 	Seqable_vtable *SeqableFns;
+	Reversible_vtable *ReversibleFns;
 	ICollection_vtable *ICollectionFns;
+	IStack_vtable *IStackFns;
 	ISeq_vtable *ISeqFns;
+	IVector_vtable *IVectorFns;
 	IMap_vtable *IMapFns;
 } interfaces;
 
-static const interfaces NullInterface = {NULL, NULL, NULL, NULL};
+static const interfaces NullInterface = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 
 typedef struct lisp_object_struct {
     object_type type;

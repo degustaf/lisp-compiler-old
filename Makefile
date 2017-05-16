@@ -1,6 +1,8 @@
 # Defines
 
 LLVM_VERSION = 3.9.1
+CMAKE_MM_VERSION = 3.7
+CMAKE_VERSION = $(CMAKE_MM_VERSION).2
 
 ifeq ($(OSTYPE),cygwin)
 	CLEANUP=rm -f
@@ -16,9 +18,12 @@ else
 	TARGET_EXTENSION=out
 endif
 
-LLVMSRC = ../llvm-$(LLVM_VERSION).src/
+CMAKEGZ = cmake-$(CMAKE_VERSION)-Linux-x86_64
+CMAKE = $(abspath ../$(CMAKEGZ)/bin/cmake)
+LLVMXZ = llvm-$(LLVM_VERSION).src
+LLVMSRC = $(abspath ../$(LLVMXZ))/
 LLVMBUILD = $(LLVMSRC)build/
-PATHL = ../llvm/
+PATHL = $(abspath ../llvm)/
 LLVMINC = $(PATHL)include/
 PATHU = ../Unity/
 PATHUS = $(PATHU)src/
@@ -92,7 +97,7 @@ $(PATHR)%.txt: $(PATHB)%.$(TARGET_EXTENSION)
 	-./$< > $@ 2>&1
 
 $(PATHB)TestReader.$(TARGET_EXTENSION): $(PATHO)TestReader.o $(PATHO)Reader.o $(PATHUS)unity.o $(PATHO)Numbers.o $(PATHO)Strings.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Cons.o $(PATHO)Util.o \
-	$(PATHO)Murmur3.o $(PATHO)Error.o $(PATHO)StringWriter.o $(PATHO)Map.o | $(LLVMCONFIG)
+	$(PATHO)Murmur3.o $(PATHO)Error.o $(PATHO)StringWriter.o $(PATHO)Map.o $(PATHO)Vector.o | $(LLVMCONFIG)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 $(PATHB)TestList.$(TARGET_EXTENSION): $(PATHO)TestList.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Util.o $(PATHO)Murmur3.o $(PATHO)Numbers.o $(PATHO)Cons.o $(PATHO)StringWriter.o $(PATHUS)unity.o \
@@ -104,7 +109,7 @@ $(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o 
 
 $(PATHB)Test%.$(TARGET_EXTENSION): $(PATHD)Test%.d
 
-$(PATHO)%.o:: $(PATHT)%.c | $(LLVMINC)
+$(PATHO)%.o:: $(PATHT)%.c | $(LLVMINC) $(PATHU)
 	$(COMPILE) $(CFLAGS) $< -o $@
 
 $(PATHO)%.o:: $(PATHS)%.c | $(LLVMINC)
@@ -136,16 +141,16 @@ clean:
 $(PATHU):
 	cd .. && git clone https://github.com/ThrowTheSwitch/Unity.git
 
-$(PATHL):
-	./install_llvm.sh $(LLVM_VERSION)
-
 $(LLVMSRC):
-	cd .. && curl -O http://releases.llvm.org/$(LLVM_VERSION)/$(LLVMSRC).tar.xz | tar -xJf
+	cd .. && curl http://releases.llvm.org/$(LLVM_VERSION)/$(LLVMXZ).tar.xz | tar -xJ
 
-$(LLVMBUILD): $(LLVMSRC)
+$(CMAKE):
+	cd .. && curl https://cmake.org/files/v$(CMAKE_MM_VERSION)/$(CMAKEGZ).tar.gz | tar -xz
+
+$(LLVMBUILD): $(LLVMSRC) $(CMAKE)
 	cd $(LLVMSRC) && $(MKDIR) build
 	# What follows should be split out, if we can decide what an appropriate target is.
-	cd $(LLVMBUILD) && cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=$(PATHL) $(LLVMSRC)
+	cd $(LLVMBUILD) && $(CMAKE) -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=$(PATHL) $(LLVMSRC)
 
 $(LLVMCONFIG):  | $(LLVMBUILD) $(PATHL)lib/libLLVMSupport.a $(PATHL)lib/libLLVMCore.a
 	cd $(LLVMBUILD) && $(MAKE) install-llvm-config

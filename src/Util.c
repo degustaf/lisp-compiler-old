@@ -10,6 +10,7 @@
 #include "Map.h"
 #include "Numbers.h"
 #include "Murmur3.h"
+#include "Vector.h"
 
 bool Equiv(const lisp_object *x, const lisp_object *y) {
 	if(x == y)
@@ -113,6 +114,20 @@ static void PrintObject(StringWriter *sw, const lisp_object *obj) {
 	}
 	printf("Not Map\n");
 	fflush(stdout);
+	if(isIVector(obj)) {
+		if(obj == (const lisp_object*) EmptyVector) {
+			AddString(sw, "[]");
+			return;
+		}
+		AddChar(sw, '[');
+		for(size_t i = 0; i < obj->fns->ICollectionFns->count((const ICollection*)obj); i++) {
+			PrintObject(sw, obj->fns->IVectorFns->nth((const IVector*)obj, i, NULL));
+			AddChar(sw, ' ');
+		}
+		Shrink(sw, 1);
+		AddChar(sw, ']');
+		return;
+	}
 	AddString(sw, obj->toString(obj));
 }
 

@@ -32,10 +32,13 @@ ISeq_vtable List_ISeq_vtable = {
 };
 
 interfaces List_interfaces = {
-	&List_Seqable_vtable, // Seqable_vtable
-	&List_ICollection_vtable,	//ICollection_vtable
-	&List_ISeq_vtable, // ISeq_vtable
-	NULL
+	&List_Seqable_vtable,		// Seqable_vtable
+	NULL,						// Reversible_vtable
+	&List_ICollection_vtable,	// ICollection_vtable
+	NULL,						// IStack_vtable
+	&List_ISeq_vtable,			// ISeq_vtable
+	NULL,						// IVector_vtable
+	NULL,						// IMap_vtable
 };
 
 struct List_struct {

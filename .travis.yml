@@ -1,9 +1,8 @@
 language: c
 
+dist: trusty
+
 os: linux
 compiler: gcc
-addons:
-    apt:
-        packages: cmake
 
 script: make all
