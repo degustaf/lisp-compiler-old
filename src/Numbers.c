@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,11 +15,13 @@ struct Integer_struct {
 };
 
 static LLVMValueRef Integer_codegen(const lisp_object *obj) {
+    assert(obj->type == INTEGER_type);
     Integer *int_obj = (Integer*)obj;
     return LLVMConstInt(LLVMInt64Type(), (unsigned long) int_obj->val, (LLVMBool)1);
 }
 
 static const char *IntegerToString(const lisp_object *obj) {
+    assert(obj->type == INTEGER_type);
     Integer *IntObj = (Integer*)obj;
     if(IntObj->str == NULL) {
         int size = snprintf(NULL, 0, "%ld", IntObj->val);
@@ -30,6 +33,12 @@ static const char *IntegerToString(const lisp_object *obj) {
     return IntObj->str;
 }
 
+static const lisp_object *IntegerCopy(const lisp_object *obj) {
+    assert(obj->type == INTEGER_type);
+    Integer *IntObj = (Integer*)obj;
+    return (lisp_object*)NewInteger(IntObj->val);
+}
+
 Integer *NewInteger(long i) {
     Integer *ret = malloc(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
@@ -37,6 +46,7 @@ Integer *NewInteger(long i) {
     ret->obj.type = INTEGER_type;
     ret->obj.codegen = Integer_codegen;
 	ret->obj.toString = IntegerToString;
+    ret->obj.copy = IntegerCopy;
 	ret->obj.fns = &NullInterface;
 
     ret->val = i;
@@ -55,11 +65,13 @@ struct Float_struct {
 };
 
 static LLVMValueRef Float_codegen(const lisp_object *obj) {
+    assert(obj->type == FLOAT_type);
     Float *flt_obj = (Float*)obj;
     return LLVMConstReal(LLVMDoubleType(), flt_obj->val);
 }
 
 static const char *FloatToString(const lisp_object *obj) {
+    assert(obj->type == FLOAT_type);
     Float *FltObj = (Float*)obj;
     if(FltObj->str == NULL) {
         int size = snprintf(NULL,0, "%g", FltObj->val);
@@ -71,6 +83,12 @@ static const char *FloatToString(const lisp_object *obj) {
     return FltObj->str;
 }
 
+static const lisp_object *FloatCopy(const lisp_object *obj) {
+    assert(obj->type == FLOAT_type);
+    Float *FltObj = (Float*)obj;
+    return (lisp_object*)NewFloat(FltObj->val);
+}
+
 Float *NewFloat(double x) {
     Float *ret = malloc(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
@@ -78,6 +96,7 @@ Float *NewFloat(double x) {
     ret->obj.type = FLOAT_type;
     ret->obj.codegen = Float_codegen;
 	ret->obj.toString = FloatToString;
+    ret->obj.copy = FloatCopy;
 	ret->obj.fns = &NullInterface;
 
     ret->val = x;

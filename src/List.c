@@ -12,6 +12,7 @@ static LLVMValueRef List_codegen(const struct lisp_object_struct *obj);
 static const char *toStringEmptyList(const lisp_object *obj);
 static const lisp_object* firstList(const ISeq*);
 static const ISeq* nextList(const ISeq*);
+static const lisp_object *ListCopy(const lisp_object *obj);
 
 Seqable_vtable List_Seqable_vtable = {
 	seqASeq // seq
@@ -44,7 +45,7 @@ struct List_struct {
     const size_t _count;
 };
     
-const List _EmptyList = {{LIST_type, List_codegen, toStringEmptyList, &List_interfaces}, NULL, NULL, 0};
+const List _EmptyList = {{LIST_type, List_codegen, toStringEmptyList, ListCopy, &List_interfaces}, NULL, NULL, 0};
 const List *const EmptyList = &_EmptyList;
 
 static LLVMValueRef List_codegen(__attribute__((unused)) const struct lisp_object_struct *obj) {
@@ -56,20 +57,33 @@ static const char *toStringEmptyList(const lisp_object *obj) {
 	return "()";
 }
 
+static const lisp_object *ListCopy(const lisp_object *obj) {
+    assert(obj->type == LIST_type);
+    List *list = (List*)obj;
+    size_t count = list->_count;
+    const lisp_object **arr = malloc(count * sizeof(*arr));
+    for(size_t i=0; i<count; i++) {
+        const lisp_object *const o = list->_first;
+        list = (List*)list->_rest;
+        arr[i] = (*(o->copy))((lisp_object*)o);
+    }
+    return (lisp_object*)CreateList(count, arr);
+}
+
 const List *NewList(const lisp_object *const first) {
     List *ret = malloc(sizeof(*ret));
     if(ret == NULL) return NULL;
 
-    List _ret = {{LIST_type, List_codegen, toString, &List_interfaces}, first, EmptyList, 1};
+    List _ret = {{LIST_type, List_codegen, toString, ListCopy, &List_interfaces}, first, EmptyList, 1};
     memcpy(ret, &_ret, sizeof(*ret));
 
     return ret;
 }
 
-const List *CreateList(size_t count, lisp_object **entries) {
+const List *CreateList(size_t count, const lisp_object **entries) {
     List *ret = (List*)EmptyList;
     for(size_t i = 1; i <= count; i++) {
-        List _ret = {{LIST_type, List_codegen, toString, &List_interfaces},
+        List _ret = {{LIST_type, List_codegen, toString, ListCopy, &List_interfaces},
                      entries[count-i],
                      ret,
                      i};

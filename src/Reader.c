@@ -12,8 +12,8 @@
 #include "Numbers.h"
 #include "Strings.h"
 
-lisp_object DONE_lisp_object = {DONE_type, NULL, NULL, NULL};
-lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL, NULL};
+lisp_object DONE_lisp_object = {DONE_type, NULL, NULL, NULL, NULL};
+lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL, NULL, NULL};
 
 typedef lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
 static MacroFn macros[128];
@@ -25,7 +25,7 @@ static bool isTerminatingMacro(int ch);
 static lisp_object *ReadNumber(FILE *input, char ch);
 static char *ReadToken(FILE *input, char ch);
 static lisp_object *interpretToken(char *token);         // Needs to be implemented.
-static lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */);
 
 // Macros
 static lisp_object *CharReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
@@ -266,10 +266,10 @@ static lisp_object *StringReader(FILE* input, __attribute__((unused)) char c /* 
 	return obj;
 }
 
-static lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
     size_t size = 8;
     size_t i = 0;
-    lisp_object **ret = malloc(size * sizeof(*ret));
+    const lisp_object **ret = malloc(size * sizeof(*ret));
 
     while(true) {
         lisp_object *form = read(input, true, delim);
@@ -288,7 +288,7 @@ static lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const co
 
 static lisp_object *ListReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
     size_t count;
-    lisp_object **list = ReadDelimitedList(input, ')', &count);
+    const lisp_object **list = ReadDelimitedList(input, ')', &count);
     if(list == NULL) return (lisp_object*) NewError(true, "");
     if(count == 0) return (lisp_object*)EmptyList;
     return (lisp_object*)CreateList(count, list);
@@ -296,7 +296,7 @@ static lisp_object *ListReader(FILE* input, __attribute__((unused)) char ch /* *
 
 static lisp_object *MapReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
     size_t count;
-    lisp_object **list = ReadDelimitedList(input, '}', &count);
+    const lisp_object **list = ReadDelimitedList(input, '}', &count);
     if(list == NULL) return (lisp_object*) NewError(true, "");
 	if(count & 1) return (lisp_object*) NewError(false, "Map literal must contain an even number of forms");
 	printf("Creating HashMap with a count of %zd.\n", count);

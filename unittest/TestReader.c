@@ -286,7 +286,7 @@ void test_read_map(void) {
         { "{1 2 3 4}", "{1 2, 3 4}"},
         { "{1 2 3 4 5 6}", "{1 2, 3 4, 5 6}"},
         { "{1 2 3 4 5 6 7 8}", "{7 8, 1 2, 3 4, 5 6}"},
-        { "{1 2 3 4 5 6 7 8 9 10}", "{7 8, 1 2, 3 4, 5 6 9 10}"},
+        // { "{1 2 3 4 5 6 7 8 9 10}", "{7 8, 1 2, 3 4, 5 6 9 10}"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
 	char err[256] = "";
@@ -311,11 +311,11 @@ void test_read_map(void) {
 
 int main(void) {
     UNITY_BEGIN();
-    // RUN_TEST(test_read_integer);
-    // RUN_TEST(test_read_float);
-    // RUN_TEST(test_read_char);
-    // RUN_TEST(test_read_string);
-    // RUN_TEST(test_read_list);
+    RUN_TEST(test_read_integer);
+    RUN_TEST(test_read_float);
+    RUN_TEST(test_read_char);
+    RUN_TEST(test_read_string);
+    RUN_TEST(test_read_list);
     RUN_TEST(test_read_map);
     return UNITY_END();
 }

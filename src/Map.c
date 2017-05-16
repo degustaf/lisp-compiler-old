@@ -32,7 +32,7 @@ static size_t index(uint32_t mask, uint32_t bit) {
 typedef struct INode_struct INode;
 
 typedef struct {
-	INode* (*assoc)(INode *node, size_t shift, uint32_t hash, lisp_object *key, lisp_object *val, bool *addedLeaf);
+	INode* (*assoc)(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
 	INode* (*assoc_thread)(INode *node, bool edit, pthread_t thread_id, size_t shift, uint32_t hash, lisp_object *key, lisp_object *val, bool *addedLeaf);
 	INode* (*without)(INode *node, size_t shift, uint32_t hash, lisp_object *key);
 	INode* (*without_thread)(INode *node, bool edit, pthread_t thread_id, size_t shift, uint32_t hash, lisp_object *key);
@@ -57,12 +57,12 @@ typedef struct {
 	bool edit;
 	pthread_t thread_id;
 	size_t count;
-	lisp_object *array[];
+	const lisp_object *array[];
 } BitmapIndexedNode;
 
 // BitmapIndexedNode function declarations.
-BitmapIndexedNode *NewBMINode(bool edit, pthread_t thread_id, uint32_t bitmap, size_t count, lisp_object **array);
-INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_object *key, lisp_object *val, bool *addedLeaf);
+BitmapIndexedNode *NewBMINode(bool edit, pthread_t thread_id, uint32_t bitmap, size_t count, const lisp_object **array);
+INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
 INode* without_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_object *key);
 const MapEntry* find_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_object *key);
 const ISeq* nodeSeq_BitmapIndexed_Node(const INode *node);
@@ -76,7 +76,7 @@ INode_vtable BMINode_vtable = {
 	nodeSeq_BitmapIndexed_Node	// nodeSeq
 };
 
-BitmapIndexedNode _EmptyBMINode = {{BMI_NODE_type, NULL, NULL, NULL}, &BMINode_vtable, 0, false, (pthread_t)NULL, 0, };
+BitmapIndexedNode _EmptyBMINode = {{BMI_NODE_type, NULL, NULL, NULL, NULL}, &BMINode_vtable, 0, false, (pthread_t)NULL, 0, };
 BitmapIndexedNode *EmptyBMINode = &_EmptyBMINode;
 
 // ArrayNode
@@ -93,7 +93,7 @@ typedef struct {
 // ArrayNode function declarations.
 
 ArrayNode *NewArrayNode(bool edit, pthread_t thread_id, size_t count, INode **array);
-INode* assocArrayNode(INode *node, size_t shift, uint32_t hash, lisp_object *key, lisp_object *val, bool *addedLeaf);
+INode* assocArrayNode(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
 static INode* pack(ArrayNode *node, bool edit, pthread_t thread_id, size_t idx);
 INode* without(INode *node, size_t shift, uint32_t hash, lisp_object *key);
 const MapEntry* findArrayNode(INode *node, size_t shift, uint32_t hash, lisp_object *key);
@@ -119,8 +119,8 @@ typedef struct {
 } NodeSeq;
 
 // NodeSeq function declarations.
-const NodeSeq *NewNodeSeq(lisp_object **array, size_t count, size_t i, const ISeq *s);
-const NodeSeq *CreateNodeSeq(lisp_object **array, size_t count, size_t i, const ISeq *s);
+const NodeSeq *NewNodeSeq(const lisp_object **array, size_t count, size_t i, const ISeq *s);
+const NodeSeq *CreateNodeSeq(const lisp_object **array, size_t count, size_t i, const ISeq *s);
 const lisp_object* firstNodeSeq(const ISeq*);
 const ISeq* nextNodeSeq(const ISeq*);
 
@@ -175,7 +175,7 @@ struct HashMap_struct {
 // TransientHashMap Function declarations.
 
 static const HashMap *asPersistent(TransientHashMap *thm);
-static TransientHashMap *assocTHM(TransientHashMap *thm, lisp_object *key, lisp_object *val);
+static TransientHashMap *assocTHM(TransientHashMap *thm, const lisp_object *key, const lisp_object *val);
 
 // HashMap Function declarations.
 
@@ -209,12 +209,12 @@ interfaces HashMap_interfaces = {
 	&HashMap_IMap_vtable,			// IMapFns
 };
 
-const HashMap _EmptyHashMap = {{HASHMAP_type, NULL, toString, &HashMap_interfaces}, 0, NULL, false, NULL};
+const HashMap _EmptyHashMap = {{HASHMAP_type, NULL, toString, NULL, &HashMap_interfaces}, 0, NULL, false, NULL};
 const HashMap *const EmptyHashMap = &_EmptyHashMap;
 
 // BitmapIndexedNode Function Definitions
 
-BitmapIndexedNode *NewBMINode(bool edit, pthread_t thread_id, uint32_t bitmap, size_t count, lisp_object **array) {
+BitmapIndexedNode *NewBMINode(bool edit, pthread_t thread_id, uint32_t bitmap, size_t count, const lisp_object **array) {
 	BitmapIndexedNode *node = malloc(sizeof(*node) + count * sizeof(lisp_object*));
 	memcpy(node, EmptyBMINode, sizeof(*node));
 	node->edit = edit;
@@ -225,7 +225,7 @@ BitmapIndexedNode *NewBMINode(bool edit, pthread_t thread_id, uint32_t bitmap, s
 	return node;
 }
 
-INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_object *key, lisp_object *val, bool *addedLeaf) {
+INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf) {
 	assert(node->obj.type == BMI_NODE_type);
 	BitmapIndexedNode *BMI_node = (BitmapIndexedNode*)node;
 	uint32_t bit = bitpos(hash, shift);
@@ -234,8 +234,8 @@ INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_o
 
 	if(BMI_node->bitmap & bit) {
 		printf("Inside 'BMI_node->bitmap & bit'\n");
-		lisp_object *lookup_key = BMI_node->array[2*idx];
-		lisp_object *lookup_val = BMI_node->array[2*idx+1];
+		const lisp_object *lookup_key = BMI_node->array[2*idx];
+		const lisp_object *lookup_val = BMI_node->array[2*idx+1];
 		if(lookup_key == NULL) {
 			INode *n = (INode*)lookup_val;
 			n = n->fns->assoc(n, shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
@@ -281,7 +281,7 @@ INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_o
 			return (INode*)NewArrayNode(false, (pthread_t)NULL, n + 1, nodes);
 		} else {
 			printf("n < 16\n");
-			lisp_object *array[2*(n+1)];
+			const lisp_object *array[2*(n+1)];
 			memcpy(&array[0], BMI_node->array, 2 * idx * sizeof(lisp_object*));
 			array[2*idx  ] = key;
 			array[2*idx+1] = val;
@@ -299,9 +299,9 @@ INode* without_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp
 	if((BMI_node->bitmap & bit) == 0)
 		return node;
 	size_t idx = index(BMI_node->bitmap, bit);
-	lisp_object *lookup_key = BMI_node->array[2*idx];
+	const lisp_object *lookup_key = BMI_node->array[2*idx];
 	if(lookup_key == NULL) {
-		lisp_object *lookup_val = BMI_node->array[2*idx+1];
+		const lisp_object *lookup_val = BMI_node->array[2*idx+1];
 		INode *n = (*(((INode*)lookup_val)->fns->without))((INode*)lookup_val, shift + NODE_LOG_SIZE, hash, key);
 		if((INode*)lookup_val == n)
 			return node;
@@ -312,13 +312,13 @@ INode* without_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp
 		}
 		if(BMI_node->bitmap == bit)
 			return NULL;
-		lisp_object *array[BMI_node->count-2];
+		const lisp_object *array[BMI_node->count-2];
 		memcpy(array, &(BMI_node->array[0]), 2*idx);
 		memcpy(&(array[2*idx]), &(BMI_node->array[2*(idx+1)]), BMI_node->count - 2*(idx+1));
 		return (INode*)NewBMINode(false, (pthread_t)NULL, BMI_node->bitmap ^ bit, BMI_node->count-2, array);
 	}
 	if(Equiv(key, lookup_key)) {
-		lisp_object *array[BMI_node->count-2];
+		const lisp_object *array[BMI_node->count-2];
 		memcpy(array, &(BMI_node->array[0]), 2*idx);
 		memcpy(&(array[2*idx]), &(BMI_node->array[2*(idx+1)]), BMI_node->count - 2*(idx+1));
 		return (INode*)NewBMINode(false, (pthread_t)NULL, BMI_node->bitmap ^ bit, BMI_node->count-2, array);
@@ -333,8 +333,8 @@ const MapEntry* find_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash
 	if((BMI_node->bitmap & bit) == 0)
 		return NULL;
 	size_t idx = index(BMI_node->bitmap, bit);
-	lisp_object *lookup_key = BMI_node->array[2*idx];
-	lisp_object *lookup_val = BMI_node->array[2*idx+1];
+	const lisp_object *lookup_key = BMI_node->array[2*idx];
+	const lisp_object *lookup_val = BMI_node->array[2*idx+1];
 	if(lookup_key == NULL)
 		return ((INode*)lookup_val)->fns->find((INode*)lookup_val, shift + NODE_LOG_SIZE, hash, key);
 	if(Equiv(key, lookup_key)) {
@@ -368,7 +368,7 @@ ArrayNode *NewArrayNode(bool edit, pthread_t thread_id, size_t count, INode **ar
 	return node;
 }
 
-INode* assocArrayNode(INode *node, size_t shift, uint32_t hash, lisp_object *key, lisp_object *val, bool *addedLeaf) {
+INode* assocArrayNode(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf) {
 	assert(node->obj.type == ARRAY_NODE_type);
 	ArrayNode *anode = (ArrayNode*)node;
 	uint32_t idx = mask(hash, shift);
@@ -390,7 +390,7 @@ INode* assocArrayNode(INode *node, size_t shift, uint32_t hash, lisp_object *key
 }
 
 static INode* pack(ArrayNode *node, bool edit, pthread_t thread_id, size_t idx) {
-	lisp_object *array[2*(node->count - 1)];
+	const lisp_object *array[2*(node->count - 1)];
 	memset(&array[0], '\0', sizeof(array));
 	size_t j = 1;
 	uint32_t bitmap = 0;
@@ -450,14 +450,14 @@ const MapEntry* findArrayNode(INode *node, size_t shift, uint32_t hash, lisp_obj
 const ISeq* nodeSeq_ArrayNode(const INode *node) {
 	assert(node->obj.type == ARRAY_NODE_type);
 	ArrayNode *anode = (ArrayNode*)node;
-	return (const ISeq*) CreateNodeSeq((lisp_object**) anode->array, NODE_SIZE, 0, NULL);
+	return (const ISeq*) CreateNodeSeq((const lisp_object**) anode->array, NODE_SIZE, 0, NULL);
 
 	return NULL;
 }
 
 // NodeSeq Function Definitions.
 
-const NodeSeq *NewNodeSeq(lisp_object **array, size_t count, size_t i, const ISeq *s) {
+const NodeSeq *NewNodeSeq(const lisp_object **array, size_t count, size_t i, const ISeq *s) {
 	assert(i <= count);
 	assert((s == NULL) || isISeq(&s->obj));
 	NodeSeq *ret = malloc(sizeof(*ret) + count * sizeof(lisp_object*));
@@ -473,7 +473,7 @@ const NodeSeq *NewNodeSeq(lisp_object **array, size_t count, size_t i, const ISe
 	return ret;
 }
 
-const NodeSeq *CreateNodeSeq(lisp_object **array, size_t count, size_t i, const ISeq *s) {
+const NodeSeq *CreateNodeSeq(const lisp_object **array, size_t count, size_t i, const ISeq *s) {
 	printf("In CreateNodeSeq.\n");
 	printf("count = %zd, i = %zd\n", count, i);
 	fflush(stdout);
@@ -534,10 +534,10 @@ const ISeq* nextNodeSeq(const ISeq *o) {
 	NodeSeq *ns = (NodeSeq*) o;
 
 	if(ns->s)
-		return (ISeq*) CreateNodeSeq((lisp_object**) ns->array, ns->count, ns->i, ns->s->obj.fns->ISeqFns->next(ns->s));
+		return (ISeq*) CreateNodeSeq((const lisp_object**) ns->array, ns->count, ns->i, ns->s->obj.fns->ISeqFns->next(ns->s));
 	printf("ns->s is NULL.\n");
 	fflush(stdout);
-	return (ISeq*) CreateNodeSeq((lisp_object**) ns->array, ns->count, ns->i+2, NULL);
+	return (ISeq*) CreateNodeSeq((const lisp_object**) ns->array, ns->count, ns->i+2, NULL);
 }
 
 // TransientHashMap Function Definitions.
@@ -548,7 +548,7 @@ static const HashMap *asPersistent(TransientHashMap *thm) {
 	return NewHashMap(thm->count, thm->root, thm->hasNull, thm->nullValue);
 }
 
-static TransientHashMap *assocTHM(TransientHashMap *thm, lisp_object *key, lisp_object *val) {
+static TransientHashMap *assocTHM(TransientHashMap *thm, const lisp_object *key, const lisp_object *val) {
 	assert(thm->edit);
 	if(key == NULL) {
 		thm->nullValue = val;
@@ -569,7 +569,7 @@ static TransientHashMap *assocTHM(TransientHashMap *thm, lisp_object *key, lisp_
 
 // HashMap Function Definitions.
 
-const HashMap *CreateHashMap(size_t count, lisp_object **entries) {
+const HashMap *CreateHashMap(size_t count, const lisp_object **entries) {
 	printf("In CreateHashMap.\n");
 	fflush(stdout);
 	TransientHashMap *ret = asTransient(EmptyHashMap);

@@ -26,7 +26,11 @@
 	TYPE(ARRAY_NODE_type) \
 	TYPE(NODESEQ_type) \
 	TYPE(HASHMAP_type) \
-	TYPE(TRANSIENTHASHMAP_type)
+	TYPE(TRANSIENTHASHMAP_type) \
+\
+	/* Vector types. */\
+	TYPE(VECTOR_type) \
+	TYPE(NODE_type)
 
 
 typedef enum {
@@ -55,6 +59,7 @@ typedef struct lisp_object_struct {
     object_type type;
     LLVMValueRef (*codegen)(const struct lisp_object_struct *);
 	const char *(*toString)(const struct lisp_object_struct *);
+    const struct lisp_object_struct* (*copy)(const struct lisp_object_struct *);
 	const interfaces *fns;
 } lisp_object;
 
