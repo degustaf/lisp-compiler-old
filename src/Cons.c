@@ -2,9 +2,9 @@
 
 #include <assert.h>
 #include <stddef.h>
-#include <stdlib.h>
 
 #include "ASeq.h"
+#include "gc.h"
 #include "List.h"
 
 
@@ -48,7 +48,7 @@ interfaces Cons_interfaces = {
 
 const Cons *NewCons(const lisp_object *obj, const ISeq *s) {
 	assert(isISeq(&s->obj));
-	Cons *ret = malloc(sizeof(*ret));
+	Cons *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = CONS_type;
 	ret->obj.fns = &Cons_interfaces;
 	ret->_first = obj;

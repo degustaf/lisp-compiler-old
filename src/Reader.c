@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "Error.h"
+#include "gc.h"
 #include "List.h"
 #include "Map.h"
 #include "Numbers.h"
@@ -109,7 +110,6 @@ lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRe
 		printf("Got token.\n");
 		fflush(stdout);
         lisp_object *ret = interpretToken(token);
-        free(token);
         return ret;
     }
 }
@@ -132,7 +132,7 @@ static bool isTerminatingMacro(int ch) {
 static lisp_object* ReadNumber(FILE *input, char ch) {
     size_t i = 1;
     size_t size = 256;
-    char *buffer = malloc(size * sizeof(*buffer));
+    char *buffer = GC_MALLOC_ATOMIC(size * sizeof(*buffer));
 	assert(buffer);
 
     for(buffer[0] = ch; true; size *= 2) {
@@ -146,7 +146,6 @@ static lisp_object* ReadNumber(FILE *input, char ch) {
                 long ret_l = strtol(buffer, &endptr, 0);
                 if(errno == 0 && endptr == buffer + i) {
                     lisp_object *ret = (lisp_object*) NewInteger(ret_l);
-                    free(buffer);
 					printf("Returning %ld\n", ret_l);
 					fflush(stdout);
                     return ret;
@@ -155,20 +154,17 @@ static lisp_object* ReadNumber(FILE *input, char ch) {
                 double ret_d = strtod(buffer, &endptr);
                 if(errno == 0 && endptr == buffer + i) {
                     lisp_object *ret = (lisp_object*) NewFloat(ret_d);
-                    free(buffer);
                     return ret;
                 }
 				size_t len = strlen(buffer) + 20;
-				char *ErrBuffer = malloc(len * sizeof(*ErrBuffer));
+				char *ErrBuffer = GC_MALLOC_ATOMIC(len * sizeof(*ErrBuffer));
                 snprintf(ErrBuffer, len, "Invalid number: %s", buffer);
 				lisp_object *ret = (lisp_object*) NewError(false, "Invalid number: %s", buffer);
-				free(ErrBuffer);
-				free(buffer);
                 return ret;
             }
             buffer[i] = ch2;
         }
-        buffer = realloc(buffer, 2*size);
+        buffer = GC_REALLOC(buffer, 2*size);
 		assert(buffer);
     }
 }
@@ -176,7 +172,7 @@ static lisp_object* ReadNumber(FILE *input, char ch) {
 static char *ReadToken(FILE *input, char ch) {
     size_t i = 1;
     size_t size = 256;
-    char *buffer = malloc(size * sizeof(*buffer));
+    char *buffer = GC_MALLOC_ATOMIC(size * sizeof(*buffer));
 	assert(buffer);
 
     for(buffer[0] = ch; true; size *= 2) {
@@ -189,7 +185,7 @@ static char *ReadToken(FILE *input, char ch) {
             }
             buffer[i] = ch2;
         }
-        buffer = realloc(buffer, 2*size);
+        buffer = GC_REALLOC(buffer, 2*size);
 		assert(buffer);
     }
 }
@@ -227,18 +223,16 @@ static lisp_object *CharReader(FILE* input, __attribute__((unused)) char c /* *l
 static lisp_object *StringReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
     size_t size = 256;
     size_t i = 0;
-    char *str = malloc(size * sizeof(*str));
+    char *str = GC_MALLOC_ATOMIC(size * sizeof(*str));
 	assert(str);
 
     for(int ch = getc(input); ch != '"'; ch = getc(input)) {
         if(ch == EOF) {
-			free(str);
             return (lisp_object*) NewError(false, "EOF while reading string.");
         }
         if(ch == '\\') {
             ch = getc(input);
             if(ch == EOF) {
-				free(str);
             	return (lisp_object*) NewError(false, "EOF while reading string.");
             }
 
@@ -262,27 +256,25 @@ static lisp_object *StringReader(FILE* input, __attribute__((unused)) char c /* 
             case '"':
                 break;
             default:
-				free(str);
                 return (lisp_object*) NewError(false, "Unsupported Escape character: \\%c", ch);
             }
         }
         if(i == size) {
             size *= 2;
-            str = realloc(str, size);
+            str = GC_REALLOC(str, size);
 			assert(str);
         }
         str[i++] = ch;
     }
 	str[i++] = '\0';
 	lisp_object *obj = (lisp_object*) NewString(str);
-	free(str);
 	return obj;
 }
 
 static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
     size_t size = 8;
     size_t i = 0;
-    const lisp_object **ret = malloc(size * sizeof(*ret));
+    const lisp_object **ret = GC_MALLOC(size * sizeof(*ret));
 	assert(ret);
 
     while(true) {
@@ -298,7 +290,7 @@ static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *co
 		fflush(stdout);
         if(size == i) {
             size *= 2;
-            ret = realloc(ret, size * sizeof(*ret));
+            ret = GC_REALLOC(ret, size * sizeof(*ret));
 			assert(ret);
         }
         ret[i++] = form;

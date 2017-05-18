@@ -1,9 +1,10 @@
+#include "Numbers.h"
+
 #include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-#include "Numbers.h"
+#include "gc.h"
 
 struct Integer_struct {
     lisp_object obj;
@@ -16,7 +17,7 @@ static const char *IntegerToString(const lisp_object *obj) {
     Integer *IntObj = (Integer*)obj;
     if(IntObj->str == NULL) {
         int size = snprintf(NULL, 0, "%ld", IntObj->val);
-        char *str = malloc((size + 1) * sizeof(*str));
+        char *str = GC_MALLOC_ATOMIC((size + 1) * sizeof(*str));
         snprintf(str, size+1, "%ld", IntObj->val);
         IntObj->str = str;
     }
@@ -31,7 +32,7 @@ static const lisp_object *IntegerCopy(const lisp_object *obj) {
 }
 
 Integer *NewInteger(long i) {
-    Integer *ret = malloc(sizeof(*ret));
+    Integer *ret = GC_MALLOC(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = INTEGER_type;
@@ -59,7 +60,7 @@ static const char *FloatToString(const lisp_object *obj) {
     Float *FltObj = (Float*)obj;
     if(FltObj->str == NULL) {
         int size = snprintf(NULL,0, "%g", FltObj->val);
-        char *str = malloc((size + 1) * sizeof(*str));
+        char *str = GC_MALLOC_ATOMIC((size + 1) * sizeof(*str));
         snprintf(str,size+1, "%g", FltObj->val);
         FltObj->str = str;
     }
@@ -74,7 +75,7 @@ static const lisp_object *FloatCopy(const lisp_object *obj) {
 }
 
 Float *NewFloat(double x) {
-    Float *ret = malloc(sizeof(*ret));
+    Float *ret = GC_MALLOC(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = FLOAT_type;

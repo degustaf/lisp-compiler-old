@@ -1,12 +1,12 @@
 #include "Vector.h"
 
 #include <assert.h>
-#include <pthread.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <string.h>
 
+#include "gc.h"
 #include "Interfaces.h"
+#include "lisp_pthread.h"
 
 #define LOG_NODE_SIZE 5
 #define NODE_SIZE (1 << LOG_NODE_SIZE)
@@ -117,7 +117,7 @@ const Vector *const EmptyVector = &_EmptyVector;
 // Node Function Definitions.
 
 Node *NewNode(bool editable, pthread_t thread_id, size_t count, const lisp_object* const* array) {
-	Node *ret = malloc(sizeof(*ret));
+	Node *ret = GC_MALLOC(sizeof(*ret));
 	memcpy(ret, EmptyNode, sizeof(*ret));
 	ret->editable = editable;
 	ret->thread_id = thread_id;
@@ -127,7 +127,7 @@ Node *NewNode(bool editable, pthread_t thread_id, size_t count, const lisp_objec
 }
 
 Node *editableRoot(const Node *const root) {
-    Node *ret = malloc(sizeof(*ret));
+    Node *ret = GC_MALLOC(sizeof(*ret));
     memset(ret, '\0', sizeof(*ret));
     ret->obj.type = NODE_type;
     ret->editable = true;
@@ -168,7 +168,7 @@ static TransientVector *TransVecConj(TransientVector *v, const lisp_object *obj)
 	if((v->count >> LOG_NODE_SIZE) > (((size_t)1) << v->shift)) {
 		newroot = NewNode(v->root->editable, v->root->thread_id, 0, NULL);
 		newroot->array[0] = (const lisp_object*) v->root;
-		newroot->array[1] = (lisp_object*) newPath(true, v->root->editable, newshift, tailnode);
+		newroot->array[1] = (lisp_object*) newPath(true, v->root->thread_id, newshift, tailnode);
 		newshift += LOG_NODE_SIZE;
 	} else {
 		newroot = pushTailTV(v, newshift, v->root, tailnode);
@@ -222,7 +222,7 @@ static const Vector *asPersistent(TransientVector *v) {
 static const Vector *NewVector(size_t cnt, size_t shift, const Node *root, size_t count, const lisp_object* const* array) {
 	printf("In NewVector.\n");
 	fflush(stdout);
-    Vector *ret = malloc(sizeof(*ret));
+    Vector *ret = GC_MALLOC(sizeof(*ret));
 	assert(ret);
     memcpy(ret, EmptyVector, sizeof(*ret));
 	printf("Copied EmptyVector.\n");
@@ -239,7 +239,7 @@ static const Vector *NewVector(size_t cnt, size_t shift, const Node *root, size_
 
 const Vector *CreateVector(size_t count, const lisp_object **entries) {
 	if(count == 0) return EmptyVector;
-    Vector *ret = malloc(sizeof(*ret));
+    Vector *ret = GC_MALLOC(sizeof(*ret));
     size_t cnt = count < NODE_SIZE ? count : NODE_SIZE;
 	printf("count = %zd, cnt = %zd\n", count, cnt);
 	fflush(stdout);
@@ -282,7 +282,7 @@ static const lisp_object *VectorCopy(__attribute__((unused)) const lisp_object *
 
 static TransientVector *asTransient(const Vector *v) {
     assert(sizeof(TransientVector) == sizeof(Vector));
-    TransientVector *ret = malloc(sizeof(*ret));
+    TransientVector *ret = GC_MALLOC(sizeof(*ret));
 
     memset(ret, '\0', sizeof(*ret));
     memcpy(&ret->obj, &v->obj, sizeof(ret->obj));

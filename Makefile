@@ -6,14 +6,17 @@ CMAKE_VERSION = $(CMAKE_MM_VERSION).2
 
 ifeq ($(OSTYPE),cygwin)
 	CLEANUP=rm -f
+	CLEANDIR=rm -rf
 	MKDIR=mkdir -p
 	TARGET_EXTENSION=out
 else ifeq ($(OS),Windows_NT)
 	CLEANUP=del /F /Q
+	CLEANDIR=rd /S /Q
 	MKDIR=mkdir
 	TARGET_EXTENSION=exe
 else
 	CLEANUP=rm -f
+	CLEANDIR=rm -rf
 	MKDIR=mkdir -p
 	TARGET_EXTENSION=out
 endif
@@ -35,6 +38,11 @@ PATHD = build/depends/
 PATHO = build/objs/
 PATHR = build/results/
 
+GCSRC = $(PATHS)gc-7.2/
+GCBUILD = $(abspath $(PATHB)gc)
+GCLIB = $(GCBUILD)/lib
+GCINC = $(GCBUILD)/include
+
 BUILD_PATHS = $(PATHB) $(PATHD) $(PATHO) $(PATHR)
 
 ifndef CC
@@ -50,11 +58,11 @@ LLVMCONFIG =	$(PATHL)bin/llvm-config
 COMPILE =		$(CC) -c
 LINK = 			$(CXX)
 # CFLAGS =		-I. -I$(PATHUS) -I$(LLVMINC) -I$(PATHS) -g -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
-CFLAGS =		-I. -I$(PATHUS) -I$(PATHS) -g -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
+CFLAGS =		-I. -I$(PATHUS) -I$(PATHS) -I$(GCINC) -g -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
 
 # LDFLAGS =		$(shell $(LLVMCONFIG) --ldflags)
-# LDLIBS =		$(shell $(LLVMCONFIG) --libs core) -lpthread -ldl -ltinfo
-LDLIBS =		-lpthread -ldl -ltinfo
+# LDLIBS =		$(shell $(LLVMCONFIG) --libs core) -L$(GCLIB) -lpthread -ldl -ltinfo -lgc
+LDLIBS =		-L$(GCLIB) -lgc -Wl,-rpath -Wl,/home/degustaf/lisp-compiler/build/gc/lib
 
 DEPEND =		$(CC) $(CFLAGS) -MM -MG -MF
 RESULTS =		$(patsubst $(PATHT)Test%.c,$(PATHR)Test%.txt,$(SRCT))
@@ -79,7 +87,7 @@ OBJS =			$(patsubst $(PATHS)%.c,$(PATHO)%.o,$(SRCS))
 all: unittest $(PATHB)lisp.$(TARGET_EXTENSION) functionaltest
 
 # $(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS) | $(LLVMCONFIG)
-$(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS)
+$(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS) | $(GCLIB)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 unittest: $(BUILD_PATHS) $(RESULTS)
@@ -100,32 +108,32 @@ $(PATHR)%.txt: $(PATHB)%.$(TARGET_EXTENSION)
 	-./$< > $@ 2>&1
 
 $(PATHB)TestReader.$(TARGET_EXTENSION): $(PATHO)TestReader.o $(PATHO)Reader.o $(PATHUS)unity.o $(PATHO)Numbers.o $(PATHO)Strings.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Cons.o $(PATHO)Util.o \
-	$(PATHO)Murmur3.o $(PATHO)Error.o $(PATHO)StringWriter.o $(PATHO)Map.o $(PATHO)Vector.o
+	$(PATHO)Murmur3.o $(PATHO)Error.o $(PATHO)StringWriter.o $(PATHO)Map.o $(PATHO)Vector.o | $(GCLIB)
 	# | $(LLVMCONFIG)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
-$(PATHB)TestList.$(TARGET_EXTENSION): $(PATHO)TestList.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Util.o $(PATHO)Murmur3.o $(PATHO)Numbers.o $(PATHO)Cons.o $(PATHO)StringWriter.o $(PATHUS)unity.o
+$(PATHB)TestList.$(TARGET_EXTENSION): $(PATHO)TestList.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Util.o $(PATHO)Murmur3.o $(PATHO)Numbers.o $(PATHO)Cons.o $(PATHO)StringWriter.o $(PATHUS)unity.o | $(GCLIB)
 	# | $(LLVMCONFIG)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
-$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o
+$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o | $(GCLIB)
 	# | $(LLVMCONFIG)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 $(PATHB)Test%.$(TARGET_EXTENSION): $(PATHD)Test%.d
 
-$(PATHO)%.o:: $(PATHT)%.c | $(PATHU)
+$(PATHO)%.o:: $(PATHT)%.c | $(PATHU) $(GCINC)
 	# | $(LLVMINC) 
 	$(COMPILE) $(CFLAGS) $< -o $@
 
-$(PATHO)%.o:: $(PATHS)%.c
+$(PATHO)%.o:: $(PATHS)%.c | $(GCINC)
 	# | $(LLVMINC)
 	$(COMPILE) $(CFLAGS) $< -o $@
 
-$(PATHUS)%.o:: $(PATHUS)%.c $(PATHUS)%.h | $(PATHU)
+$(PATHUS)%.o:: $(PATHUS)%.c $(PATHUS)%.h | $(PATHU) $(GCINC)
 	$(COMPILE) $(CFLAGS) $< -o $@ 
 
-$(PATHD)%.d:: $(PATHT)%.c
+$(PATHD)%.d:: $(PATHT)%.c | $(GCLIB)
 	# | $(LLVMINC)
 	$(DEPEND) $@ $<
 
@@ -145,6 +153,8 @@ clean:
 	$(CLEANUP) $(PATHO)*.o
 	$(CLEANUP) $(PATHB)*.$(TARGET_EXTENSION)
 	$(CLEANUP) $(PATHR)*.txt
+	$(CLEANDIR) $(GCBUILD)
+	cd $(GCSRC) && $(MAKE) clean
 
 $(PATHU):
 	cd .. && git clone --depth 1 https://github.com/ThrowTheSwitch/Unity.git
@@ -172,8 +182,19 @@ $(PATHL)lib/libLLVMSupport.a: | $(LLVMBUILD)
 $(PATHL)lib/libLLVMCore.a: | $(LLVMBUILD)
 	cd $(LLVMBUILD) && $(MAKE) install-LLVMCore
 
-# Unknown target:
-# 	git clone -b release-7_6 --single-branch https://github.com/ivmai/bdwgc.git
+$(GCSRC)Makefile:
+	cd $(GCSRC) && ./configure --prefix=$(GCBUILD) --disable-threads
+
+$(GCSRC).libs: $(GCSRC)Makefile
+	cd $(GCSRC) && $(MAKE)
+
+$(GCINC): $(GCSRC).libs
+	cd $(GCSRC) && $(MAKE) check
+	cd $(GCSRC) && $(MAKE) install
+
+$(GCLIB): $(GCSRC).libs
+	cd $(GCSRC) && $(MAKE) check
+	cd $(GCSRC) && $(MAKE) install
 
 # Additional targets will need to be added for these
 # make -j installhdrs 

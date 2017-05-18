@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -8,8 +7,10 @@
 
 #include "ASeq.h"
 #include "Cons.h"
+#include "gc.h"
 #include "Interfaces.h"
 #include "intrinsics.h"
+#include "lisp_pthread.h"
 #include "nodes.h"
 #include "Util.h"
 
@@ -221,7 +222,7 @@ const HashMap *const EmptyHashMap = &_EmptyHashMap;
 // BitmapIndexedNode Function Definitions
 
 BitmapIndexedNode *NewBMINode(bool edit, pthread_t thread_id, uint32_t bitmap, size_t count, const lisp_object **array) {
-	BitmapIndexedNode *node = malloc(sizeof(*node) + count * sizeof(lisp_object*));
+	BitmapIndexedNode *node = GC_MALLOC(sizeof(*node) + count * sizeof(lisp_object*));
 	memcpy(node, EmptyBMINode, sizeof(*node));
 	node->edit = edit;
 	node->thread_id = thread_id;
@@ -344,7 +345,7 @@ const MapEntry* find_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash
 	if(lookup_key == NULL)
 		return ((INode*)lookup_val)->fns->find((INode*)lookup_val, shift + NODE_LOG_SIZE, hash, key);
 	if(Equiv(key, lookup_key)) {
-		MapEntry *ret = malloc(sizeof(*ret));
+		MapEntry *ret = GC_MALLOC(sizeof(*ret));
 		ret->key = lookup_key;
 		ret->val = lookup_val;
 		return ret;
@@ -363,7 +364,7 @@ const ISeq* nodeSeq_BitmapIndexed_Node(const INode *node) {
 // ArrayNode function Definitions.
 
 ArrayNode *NewArrayNode(bool edit, pthread_t thread_id, size_t count, INode **array) {
-	ArrayNode *node = malloc(sizeof(*node));
+	ArrayNode *node = GC_MALLOC(sizeof(*node));
 	memset(node, '\0', sizeof(*node));
 	node->obj.type = ARRAY_NODE_type;
 	node->fns = &ArrayNode_vtable;
@@ -466,7 +467,7 @@ const ISeq* nodeSeq_ArrayNode(const INode *node) {
 const NodeSeq *NewNodeSeq(const lisp_object **array, size_t count, size_t i, const ISeq *s) {
 	assert(i <= count);
 	assert((s == NULL) || isISeq(&s->obj));
-	NodeSeq *ret = malloc(sizeof(*ret) + count * sizeof(lisp_object*));
+	NodeSeq *ret = GC_MALLOC(sizeof(*ret) + count * sizeof(lisp_object*));
 	ret->obj.type = NODESEQ_type;
 	ret->obj.toString = toString;
 	ret->obj.fns = &NodeSeq_interfaces;
@@ -526,7 +527,7 @@ const lisp_object* firstNodeSeq(const ISeq *o) {
 	if(ns->s)
 		return ns->s->obj.fns->ISeqFns->first(ns->s);
 
-	MapEntry *ret = malloc(sizeof(*ret));
+	MapEntry *ret = GC_MALLOC(sizeof(*ret));
 	ret->key = ns->array[ns->i];
 	ret->val = ns->array[ns->i+1];
 	return (lisp_object*) ret;
@@ -590,7 +591,7 @@ const HashMap *CreateHashMap(size_t count, const lisp_object **entries) {
 }
 
 static const HashMap *NewHashMap(int count, INode* root, bool hasNull, const lisp_object *const nullValue) {
-	HashMap *ret = malloc(sizeof(*ret));
+	HashMap *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = HASHMAP_type;
 	ret->obj.toString = toString;
 	ret->obj.fns = &HashMap_interfaces;
@@ -606,7 +607,7 @@ static TransientHashMap *asTransient(const HashMap *const hm) {
 	printf("In asTransient.\n");
 	printf("thm has size %zd\n", sizeof(TransientHashMap));
 	fflush(stdout);
-	TransientHashMap *thm = malloc(sizeof(*thm));
+	TransientHashMap *thm = GC_MALLOC(sizeof(*thm));
 	printf("Allocated thm.\n");
 	fflush(stdout);
 	thm->obj.type = TRANSIENTHASHMAP_type;

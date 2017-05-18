@@ -1,10 +1,10 @@
 #include "List.h"
 
 #include <assert.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "ASeq.h"
+#include "gc.h"
 #include "Interfaces.h"
 #include "Util.h"
 
@@ -59,7 +59,7 @@ static const lisp_object *ListCopy(const lisp_object *obj) {
     assert(obj->type == LIST_type);
     List *list = (List*)obj;
     size_t count = list->_count;
-    const lisp_object **arr = malloc(count * sizeof(*arr));
+    const lisp_object **arr = GC_MALLOC(count * sizeof(*arr));
     for(size_t i=0; i<count; i++) {
         const lisp_object *const o = list->_first;
         list = (List*)list->_rest;
@@ -69,7 +69,7 @@ static const lisp_object *ListCopy(const lisp_object *obj) {
 }
 
 const List *NewList(const lisp_object *const first) {
-    List *ret = malloc(sizeof(*ret));
+    List *ret = GC_MALLOC(sizeof(*ret));
     if(ret == NULL) return NULL;
 
     List _ret = {{LIST_type, toString, ListCopy, &List_interfaces}, first, EmptyList, 1};
@@ -85,7 +85,7 @@ const List *CreateList(size_t count, const lisp_object **entries) {
                      entries[count-i],
                      ret,
                      i};
-        ret = malloc(sizeof(*ret));
+        ret = GC_MALLOC(sizeof(*ret));
         memcpy(ret, &_ret, sizeof(*ret));
     }
     return ret;

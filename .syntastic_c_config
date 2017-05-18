@@ -1,6 +1,7 @@
 -I../Unity/src/
 -I../llvm/include/
 -Isrc/
+-Ibuild/gc/include/
 -g
 -DTEST
 -Wall

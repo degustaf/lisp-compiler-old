@@ -36,3 +36,29 @@
 build/
 
 tags
+
+# from bdwgc Garbage Collector.
+**/.deps/
+.dirstamp
+config.h
+stamp-h1
+/src/gc-7.2/*test.log
+/src/gc-7.2/*test.trs
+/src/gc-7.2/Makefile
+/src/gc-7.2/bdw-gc.pc
+/src/gc-7.2/config.log
+/src/gc-7.2/config.status
+/src/gc-7.2/libatomic_ops*
+/src/gc-7.2/libtool
+/src/gc-7.2/.libs/
+/src/gc-7.2/gctest
+/src/gc-7.2/hugetest
+/src/gc-7.2/leaktest
+/src/gc-7.2/middletest
+/src/gc-7.2/realloc_test
+/src/gc-7.2/smashtest
+/src/gc-7.2/staticrootstest
+/src/gc-7.2/initsecondarythread_test
+/src/gc-7.2/threadkey_test
+/src/gc-7.2/threadleaktest
+/src/gc-7.2/test-suite.log

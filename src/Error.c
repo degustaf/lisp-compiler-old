@@ -2,9 +2,10 @@
 
 #include <assert.h>
 #include <stdarg.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "gc.h"
 
 struct ErrorStruct {
 	lisp_object obj;
@@ -18,7 +19,7 @@ static const char *toStringError(const lisp_object *obj) {
 }
 
 const Error *NewError(bool EOFflag, const char *restrict format, ...) {
-	Error *ret = malloc(sizeof(*ret));
+	Error *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = EOFflag ? EOF_type : ERROR_type;
 	ret->obj.toString = toStringError;
 	ret->obj.fns = &NullInterface;
@@ -27,7 +28,7 @@ const Error *NewError(bool EOFflag, const char *restrict format, ...) {
 	va_start(argp, format);
 	va_copy(argp2, argp);
 	size_t len = vsnprintf(NULL, 0, format, argp);
-	ret->msg = calloc((len+1), sizeof(*format));
+	ret->msg = GC_MALLOC((len+1) * sizeof(*format));
 	vsnprintf(ret->msg, len+1, format, argp2);
 	va_end(argp);
 	va_end(argp2);
