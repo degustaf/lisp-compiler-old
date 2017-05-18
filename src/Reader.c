@@ -13,8 +13,8 @@
 #include "Strings.h"
 #include "Vector.h"
 
-lisp_object DONE_lisp_object = {DONE_type, NULL, NULL, NULL, NULL};
-lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL, NULL, NULL};
+lisp_object DONE_lisp_object = {DONE_type, NULL, NULL, NULL};
+lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL, NULL};
 
 typedef lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
 static MacroFn macros[128];
@@ -275,6 +275,7 @@ static lisp_object *StringReader(FILE* input, __attribute__((unused)) char c /* 
     }
 	str[i++] = '\0';
 	lisp_object *obj = (lisp_object*) NewString(str);
+	free(str);
 	return obj;
 }
 

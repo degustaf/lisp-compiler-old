@@ -76,7 +76,7 @@ INode_vtable BMINode_vtable = {
 	nodeSeq_BitmapIndexed_Node	// nodeSeq
 };
 
-BitmapIndexedNode _EmptyBMINode = {{BMI_NODE_type, NULL, NULL, NULL, NULL}, &BMINode_vtable, 0, false, (pthread_t)NULL, 0, };
+BitmapIndexedNode _EmptyBMINode = {{BMI_NODE_type, NULL, NULL, NULL}, &BMINode_vtable, 0, false, (pthread_t)NULL, 0, };
 BitmapIndexedNode *EmptyBMINode = &_EmptyBMINode;
 
 // ArrayNode
@@ -215,7 +215,7 @@ interfaces HashMap_interfaces = {
 	&HashMap_IMap_vtable,			// IMapFns
 };
 
-const HashMap _EmptyHashMap = {{HASHMAP_type, NULL, toString, NULL, &HashMap_interfaces}, 0, NULL, false, NULL};
+const HashMap _EmptyHashMap = {{HASHMAP_type, toString, NULL, &HashMap_interfaces}, 0, NULL, false, NULL};
 const HashMap *const EmptyHashMap = &_EmptyHashMap;
 
 // BitmapIndexedNode Function Definitions
@@ -468,7 +468,6 @@ const NodeSeq *NewNodeSeq(const lisp_object **array, size_t count, size_t i, con
 	assert((s == NULL) || isISeq(&s->obj));
 	NodeSeq *ret = malloc(sizeof(*ret) + count * sizeof(lisp_object*));
 	ret->obj.type = NODESEQ_type;
-	ret->obj.codegen = NULL;
 	ret->obj.toString = toString;
 	ret->obj.fns = &NodeSeq_interfaces;
 
@@ -593,7 +592,6 @@ const HashMap *CreateHashMap(size_t count, const lisp_object **entries) {
 static const HashMap *NewHashMap(int count, INode* root, bool hasNull, const lisp_object *const nullValue) {
 	HashMap *ret = malloc(sizeof(*ret));
 	ret->obj.type = HASHMAP_type;
-	ret->obj.codegen = NULL;
 	ret->obj.toString = toString;
 	ret->obj.fns = &HashMap_interfaces;
 	memcpy((void*) &(ret->count), &count, sizeof(count));
@@ -612,7 +610,6 @@ static TransientHashMap *asTransient(const HashMap *const hm) {
 	printf("Allocated thm.\n");
 	fflush(stdout);
 	thm->obj.type = TRANSIENTHASHMAP_type;
-	thm->obj.codegen = NULL;
 	thm->obj.toString = NULL;
 	printf("populated thm->obj.\n");
 	fflush(stdout);

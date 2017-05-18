@@ -27,7 +27,7 @@ static Node *NewNode(bool editable, pthread_t thread_id, size_t count, const lis
 static Node *editableRoot(const Node *const root);
 static Node *newPath(bool editable, pthread_t thread_id, size_t level, Node *node);
 
-const Node _EmptyNode = {{NODE_type, NULL, NULL, NULL, NULL}, false, 0, {NULL}};
+const Node _EmptyNode = {{NODE_type, NULL, NULL, NULL}, false, 0, {NULL}};
 const Node *const EmptyNode = &_EmptyNode;
 
 // TransientVector
@@ -61,7 +61,6 @@ static const Vector *asPersistent(TransientVector *v);
 // Vector Function Declarations.
 
 static const Vector *NewVector(size_t cnt, size_t shift, const Node *root, size_t count, const lisp_object* const* array);
-static LLVMValueRef VectorCodegen(const lisp_object *obj);
 static const char *VectorToString(const lisp_object *obj);
 static const lisp_object *VectorCopy(const lisp_object *obj);
 static TransientVector *asTransient(const Vector *v);
@@ -108,7 +107,7 @@ interfaces Vector_interfaces = {
 	NULL,							// IMapFns
 };
 
-const Vector _EmptyVector = {{VECTOR_type, VectorCodegen, VectorToString, VectorCopy, &Vector_interfaces},
+const Vector _EmptyVector = {{VECTOR_type, VectorToString, VectorCopy, &Vector_interfaces},
                    0,
                    LOG_NODE_SIZE,
                    &_EmptyNode,
@@ -269,11 +268,6 @@ const Vector *CreateVector(size_t count, const lisp_object **entries) {
 	fflush(stdout);
 
 	return asPersistent(trans);
-}
-
-static LLVMValueRef VectorCodegen(__attribute__((unused)) const lisp_object *obj) {
-    // TODO
-    return NULL;
 }
 
 static const char *VectorToString(__attribute__((unused)) const lisp_object *obj) {

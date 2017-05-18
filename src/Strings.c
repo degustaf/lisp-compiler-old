@@ -15,10 +15,6 @@ static const char *CharToString(const lisp_object *obj) {
     return ch->val;
 }
 
-// LLVMValueRef Char_codegen(lisp_object *obj) {
-//     return NULL;
-// }
-
 static const lisp_object *CharCopy(const lisp_object *obj) {
     assert(obj->type == CHAR_type);
     Char *ch = (Char*)obj;
@@ -52,31 +48,25 @@ static const char *StringToString(const lisp_object *obj) {
     return str->str;
 }
 
-// LLVMValueRef String_codegen(lisp_object *obj) {
-//     return NULL;
-// }
-
 static const lisp_object *StringCopy(const lisp_object *obj) {
     assert(obj->type == STRING_type);
     String *str = (String*)obj;
-    char *buffer = malloc(strlen(str->str)+1);
-    strcpy(buffer, str->str);
-
-    return (lisp_object*)NewString(buffer);
+    return (lisp_object*)NewString(str->str);
 }
 
 String *NewString(char *str) {
-	// fprintf(stderr, "In NewString: str = '%s'\n", str);
     String *ret = malloc(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = STRING_type;
-    // ret->obj.codegen = String_codegen;
     ret->obj.toString = StringToString;
     ret->obj.copy = StringCopy;
 	ret->obj.fns = &NullInterface;
 
-    ret->str = str;
+	size_t len = strlen(str);
+	ret->str = malloc((len+1) * sizeof(*str));
+    strncpy(ret->str, str, len);
+	ret->str[len] = '\0';
 
     return ret;
 }

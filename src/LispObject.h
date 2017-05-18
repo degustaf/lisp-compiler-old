@@ -3,9 +3,9 @@
 
 #include "stddef.h"
 
-#include "llvm-c/Types.h"
+// #include "llvm-c/Types.h"
 
-// These can be extracted out of this file to a seperate hesader if needed for another enum.
+// These can be extracted out of this file to a seperate header if needed for another enum.
 #define GENERATE_ENUM(ENUM) ENUM,
 #define GENERATE_STRING(ENUM) #ENUM,
 
@@ -63,7 +63,6 @@ static const interfaces NullInterface = {NULL, NULL, NULL, NULL, NULL, NULL, NUL
 
 typedef struct lisp_object_struct {
     object_type type;
-    LLVMValueRef (*codegen)(const struct lisp_object_struct *);
 	const char *(*toString)(const struct lisp_object_struct *);
     const struct lisp_object_struct* (*copy)(const struct lisp_object_struct *);
 	const interfaces *fns;

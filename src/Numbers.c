@@ -3,9 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "llvm-c/Types.h"
-#include "llvm-c/Core.h"
-
 #include "Numbers.h"
 
 struct Integer_struct {
@@ -13,12 +10,6 @@ struct Integer_struct {
     long val;
     char *str;
 };
-
-static LLVMValueRef Integer_codegen(const lisp_object *obj) {
-    assert(obj->type == INTEGER_type);
-    Integer *int_obj = (Integer*)obj;
-    return LLVMConstInt(LLVMInt64Type(), (unsigned long) int_obj->val, (LLVMBool)1);
-}
 
 static const char *IntegerToString(const lisp_object *obj) {
     assert(obj->type == INTEGER_type);
@@ -44,7 +35,6 @@ Integer *NewInteger(long i) {
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = INTEGER_type;
-    ret->obj.codegen = Integer_codegen;
 	ret->obj.toString = IntegerToString;
     ret->obj.copy = IntegerCopy;
 	ret->obj.fns = &NullInterface;
@@ -63,12 +53,6 @@ struct Float_struct {
     double val;
     char *str;
 };
-
-static LLVMValueRef Float_codegen(const lisp_object *obj) {
-    assert(obj->type == FLOAT_type);
-    Float *flt_obj = (Float*)obj;
-    return LLVMConstReal(LLVMDoubleType(), flt_obj->val);
-}
 
 static const char *FloatToString(const lisp_object *obj) {
     assert(obj->type == FLOAT_type);
@@ -94,7 +78,6 @@ Float *NewFloat(double x) {
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = FLOAT_type;
-    ret->obj.codegen = Float_codegen;
 	ret->obj.toString = FloatToString;
     ret->obj.copy = FloatCopy;
 	ret->obj.fns = &NullInterface;

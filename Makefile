@@ -49,10 +49,12 @@ SRCT =			$(wildcard $(PATHT)*.c)
 LLVMCONFIG =	$(PATHL)bin/llvm-config
 COMPILE =		$(CC) -c
 LINK = 			$(CXX)
-CFLAGS =		-I. -I$(PATHUS) -I$(LLVMINC) -I$(PATHS) -g -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
+# CFLAGS =		-I. -I$(PATHUS) -I$(LLVMINC) -I$(PATHS) -g -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
+CFLAGS =		-I. -I$(PATHUS) -I$(PATHS) -g -DTEST -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L
 
-LDFLAGS =		$(shell $(LLVMCONFIG) --ldflags)
-LDLIBS =		$(shell $(LLVMCONFIG) --libs core) -lpthread -ldl -ltinfo
+# LDFLAGS =		$(shell $(LLVMCONFIG) --ldflags)
+# LDLIBS =		$(shell $(LLVMCONFIG) --libs core) -lpthread -ldl -ltinfo
+LDLIBS =		-lpthread -ldl -ltinfo
 
 DEPEND =		$(CC) $(CFLAGS) -MM -MG -MF
 RESULTS =		$(patsubst $(PATHT)Test%.c,$(PATHR)Test%.txt,$(SRCT))
@@ -76,7 +78,8 @@ OBJS =			$(patsubst $(PATHS)%.c,$(PATHO)%.o,$(SRCS))
 
 all: unittest $(PATHB)lisp.$(TARGET_EXTENSION) functionaltest
 
-$(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS) | $(LLVMCONFIG)
+# $(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS) | $(LLVMCONFIG)
+$(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 unittest: $(BUILD_PATHS) $(RESULTS)
@@ -97,28 +100,33 @@ $(PATHR)%.txt: $(PATHB)%.$(TARGET_EXTENSION)
 	-./$< > $@ 2>&1
 
 $(PATHB)TestReader.$(TARGET_EXTENSION): $(PATHO)TestReader.o $(PATHO)Reader.o $(PATHUS)unity.o $(PATHO)Numbers.o $(PATHO)Strings.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Cons.o $(PATHO)Util.o \
-	$(PATHO)Murmur3.o $(PATHO)Error.o $(PATHO)StringWriter.o $(PATHO)Map.o $(PATHO)Vector.o | $(LLVMCONFIG)
+	$(PATHO)Murmur3.o $(PATHO)Error.o $(PATHO)StringWriter.o $(PATHO)Map.o $(PATHO)Vector.o
+	# | $(LLVMCONFIG)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
-$(PATHB)TestList.$(TARGET_EXTENSION): $(PATHO)TestList.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Util.o $(PATHO)Murmur3.o $(PATHO)Numbers.o $(PATHO)Cons.o $(PATHO)StringWriter.o $(PATHUS)unity.o \
-	| $(LLVMCONFIG)
+$(PATHB)TestList.$(TARGET_EXTENSION): $(PATHO)TestList.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Util.o $(PATHO)Murmur3.o $(PATHO)Numbers.o $(PATHO)Cons.o $(PATHO)StringWriter.o $(PATHUS)unity.o
+	# | $(LLVMCONFIG)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
-$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o | $(LLVMCONFIG)
+$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o
+	# | $(LLVMCONFIG)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 $(PATHB)Test%.$(TARGET_EXTENSION): $(PATHD)Test%.d
 
-$(PATHO)%.o:: $(PATHT)%.c | $(LLVMINC) $(PATHU)
+$(PATHO)%.o:: $(PATHT)%.c | $(PATHU)
+	# | $(LLVMINC) 
 	$(COMPILE) $(CFLAGS) $< -o $@
 
-$(PATHO)%.o:: $(PATHS)%.c | $(LLVMINC)
+$(PATHO)%.o:: $(PATHS)%.c
+	# | $(LLVMINC)
 	$(COMPILE) $(CFLAGS) $< -o $@
 
 $(PATHUS)%.o:: $(PATHUS)%.c $(PATHUS)%.h | $(PATHU)
 	$(COMPILE) $(CFLAGS) $< -o $@ 
 
-$(PATHD)%.d:: $(PATHT)%.c | $(LLVMINC)
+$(PATHD)%.d:: $(PATHT)%.c
+	# | $(LLVMINC)
 	$(DEPEND) $@ $<
 
 $(PATHB):
@@ -139,7 +147,7 @@ clean:
 	$(CLEANUP) $(PATHR)*.txt
 
 $(PATHU):
-	cd .. && git clone https://github.com/ThrowTheSwitch/Unity.git
+	cd .. && git clone --depth 1 https://github.com/ThrowTheSwitch/Unity.git
 
 $(LLVMSRC):
 	cd .. && curl http://releases.llvm.org/$(LLVM_VERSION)/$(LLVMXZ).tar.xz | tar -xJ
@@ -163,6 +171,9 @@ $(PATHL)lib/libLLVMSupport.a: | $(LLVMBUILD)
 
 $(PATHL)lib/libLLVMCore.a: | $(LLVMBUILD)
 	cd $(LLVMBUILD) && $(MAKE) install-LLVMCore
+
+# Unknown target:
+# 	git clone -b release-7_6 --single-branch https://github.com/ivmai/bdwgc.git
 
 # Additional targets will need to be added for these
 # make -j installhdrs 

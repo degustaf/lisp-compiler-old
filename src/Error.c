@@ -20,7 +20,6 @@ static const char *toStringError(const lisp_object *obj) {
 const Error *NewError(bool EOFflag, const char *restrict format, ...) {
 	Error *ret = malloc(sizeof(*ret));
 	ret->obj.type = EOFflag ? EOF_type : ERROR_type;
-	ret->obj.codegen = NULL;
 	ret->obj.toString = toStringError;
 	ret->obj.fns = &NullInterface;
 

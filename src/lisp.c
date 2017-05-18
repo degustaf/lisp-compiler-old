@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "llvm-c/Types.h"
-#include "llvm-c/Core.h"
-
 #include "Repl.h"
 
 void cmd_line_err(void) {
@@ -13,7 +10,6 @@ void cmd_line_err(void) {
 int main(int argc, char **argv) {
     int c;
     __attribute__((unused)) char *out_file = "a.out";
-    __attribute__((unused)) LLVMContextRef context = LLVMContextCreate();
 
     while((c = getopt(argc, argv, ":o:")) != -1) {
         switch(c) {
