@@ -1,4 +1,4 @@
-#include "Error.h"
+#include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
 
 #include <assert.h>
 #include <stdarg.h>
@@ -34,4 +34,8 @@ const Error *NewError(bool EOFflag, const char *restrict format, ...) {
 	va_end(argp2);
 
 	return ret;
+}
+
+const Error *NewArityError(size_t actual, const char *restrict name) {
+	return NewError(false, "Wrong number of args (%zd) passed to %s\n", actual, name);
 }

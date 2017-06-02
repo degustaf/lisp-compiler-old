@@ -5,13 +5,16 @@
 
 #include "Map.h"
 
+#include "AFn.h"
 #include "ASeq.h"
 #include "Cons.h"
+#include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
 #include "gc.h"
 #include "Interfaces.h"
 #include "intrinsics.h"
 #include "lisp_pthread.h"
 #include "nodes.h"
+#include "Numbers.h"
 #include "Util.h"
 
 // Support functions
@@ -32,12 +35,12 @@ static size_t index(uint32_t mask, uint32_t bit) {
 
 typedef struct INode_struct INode;
 
-typedef struct {
-	INode* (*assoc)(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
+typedef struct {	// INode_vtable
+	const INode* (*assoc)(const INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
 	INode* (*assoc_thread)(INode *node, bool edit, pthread_t thread_id, size_t shift, uint32_t hash, lisp_object *key, lisp_object *val, bool *addedLeaf);
-	INode* (*without)(INode *node, size_t shift, uint32_t hash, lisp_object *key);
+	const INode* (*without)(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
 	INode* (*without_thread)(INode *node, bool edit, pthread_t thread_id, size_t shift, uint32_t hash, lisp_object *key);
-	const MapEntry* (*find)(INode *node, size_t shift, uint32_t hash, lisp_object *key);
+	const MapEntry* (*find)(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
 	const ISeq* (*nodeSeq)(const INode *node);
 	// lisp_object* (*kvreduce)(lisp_object* (*f)(lisp_object*), lisp_object *init);
 	// lisp_object* (*fold)(...)
@@ -48,6 +51,10 @@ struct INode_struct {
 	lisp_object obj;
 	INode_vtable *fns;
 };
+
+// INode function declarations.
+
+static const INode* createNode(bool edit, pthread_t thread_id, size_t shift, const lisp_object *key1, const lisp_object *val1, uint32_t key2hash, const lisp_object *key2, const lisp_object *val2);
 
 // BitmapIndexedNode
 
@@ -63,13 +70,13 @@ typedef struct {
 
 // BitmapIndexedNode function declarations.
 BitmapIndexedNode *NewBMINode(bool edit, pthread_t thread_id, uint32_t bitmap, size_t count, const lisp_object **array);
-INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
-INode* without_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_object *key);
-const MapEntry* find_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_object *key);
+const INode* assocBitmapIndexed_Node(const INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
+const INode* without_BitmapIndexed_Node(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
+const MapEntry* find_BitmapIndexed_Node(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
 const ISeq* nodeSeq_BitmapIndexed_Node(const INode *node);
 
 INode_vtable BMINode_vtable = {
-	assoc_BitmapIndexed_Node,	// assoc
+	assocBitmapIndexed_Node,	// assoc
 	NULL,						// assoc_thread
 	without_BitmapIndexed_Node,	// without
 	NULL,						// without_thread
@@ -77,7 +84,7 @@ INode_vtable BMINode_vtable = {
 	nodeSeq_BitmapIndexed_Node	// nodeSeq
 };
 
-BitmapIndexedNode _EmptyBMINode = {{BMI_NODE_type, NULL, NULL, NULL}, &BMINode_vtable, 0, false, (pthread_t)NULL, 0, };
+BitmapIndexedNode _EmptyBMINode = {{BMI_NODE_type, NULL, NULL, NULL, NULL, NULL}, &BMINode_vtable, 0, false, (pthread_t)NULL, 0, };
 BitmapIndexedNode *EmptyBMINode = &_EmptyBMINode;
 
 // ArrayNode
@@ -88,25 +95,55 @@ typedef struct {
 	bool edit;
 	pthread_t thread_id;
 	size_t count;
-	INode *array[NODE_SIZE];
+	const INode *array[NODE_SIZE];
 } ArrayNode;
 
 // ArrayNode function declarations.
 
-ArrayNode *NewArrayNode(bool edit, pthread_t thread_id, size_t count, INode **array);
-INode* assocArrayNode(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
+ArrayNode *NewArrayNode(bool edit, pthread_t thread_id, size_t count, const INode **array);
+const INode* assocArrayNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
 static INode* pack(ArrayNode *node, bool edit, pthread_t thread_id, size_t idx);
-INode* without(INode *node, size_t shift, uint32_t hash, lisp_object *key);
-const MapEntry* findArrayNode(INode *node, size_t shift, uint32_t hash, lisp_object *key);
+const INode* withoutArrayNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
+const MapEntry* findArrayNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
 const ISeq* nodeSeq_ArrayNode(const INode *node);
 
 INode_vtable ArrayNode_vtable = {
 	assocArrayNode,		// assoc
 	NULL,				// assoc_thread
-	without,			// without
+	withoutArrayNode,	// without
 	NULL,				// without_thread
 	findArrayNode,		// find
 	nodeSeq_ArrayNode	// nodeSeq
+};
+
+// CollisionNode
+
+typedef struct {	// CollisionNode
+	lisp_object obj;
+	INode_vtable *fns;
+	uint32_t hash;
+	size_t count;
+	bool edit;
+	pthread_t thread_id;
+	const lisp_object *array[];
+} CollisionNode;
+
+// CollisionNode function declarations.
+
+static CollisionNode *NewCollisionNode(bool edit, pthread_t thread_id, uint32_t hash, size_t count, const lisp_object **array);
+static const INode* assocCollisionNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf);
+static const INode* withoutCollisionNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
+static const MapEntry* findCollisionNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
+static const ISeq* nodeSeqCollisionNode(const INode *node);
+static int findIndex(const CollisionNode *cnode, const lisp_object *key);
+
+INode_vtable CollisionNode_vtable = {
+	assocCollisionNode,		// assoc
+	NULL,					// assoc_thread
+	withoutCollisionNode,	// without
+	NULL,					// without_thread
+	findCollisionNode,		// find
+	nodeSeqCollisionNode	// nodeSeq
 };
 
 // NodeSeq
@@ -148,6 +185,40 @@ interfaces NodeSeq_interfaces = {
 	&NodeSeq_ICollection_vtable,	// ICollectionFns
 	NULL,							// IStackFns
 	&NodeSeq_ISeq_vtable,			// ISeqFns
+	NULL,							// IFnFns
+	NULL,							// IVectorFns
+	NULL,							// IMapFns
+};
+
+// ArrayNodeSeq
+
+typedef struct {
+	lisp_object obj;
+	const size_t i;
+	const ISeq *const s;
+	const INode *array[NODE_SIZE];
+} ArrayNodeSeq;
+
+// NodeSeq function declarations.
+const ArrayNodeSeq *NewArrayNodeSeq(const INode **array, size_t i, const ISeq *s);
+const ArrayNodeSeq *CreateArrayNodeSeq(const INode **array, size_t i, const ISeq *s);
+const lisp_object* firstArrayNodeSeq(const ISeq*);
+const ISeq* nextArrayNodeSeq(const ISeq*);
+
+ISeq_vtable ArrayNodeSeq_ISeq_vtable = {
+	firstArrayNodeSeq,	// first
+	nextArrayNodeSeq,	// next
+	moreASeq,			// more
+	consASeq,			// cons
+};
+
+interfaces ArrayNodeSeq_interfaces = {
+	&NodeSeq_Seqable_vtable,		// SeqableFns
+	NULL,							// ReversibleFns
+	&NodeSeq_ICollection_vtable,	// ICollectionFns
+	NULL,							// IStackFns
+	&ArrayNodeSeq_ISeq_vtable,		// ISeqFns
+	NULL,							// IFnFns
 	NULL,							// IVectorFns
 	NULL,							// IMapFns
 };
@@ -183,10 +254,17 @@ static TransientHashMap *assocTHM(TransientHashMap *thm, const lisp_object *key,
 
 // HashMap Function declarations.
 
-static const HashMap *NewHashMap(int count, INode* root, bool hasNull, const lisp_object *const nullValue);
+static const HashMap *NewHashMap(int count, const INode* root, bool hasNull, const lisp_object *const nullValue);
 static TransientHashMap *asTransient(const HashMap *const hm);
 const ISeq *seqHashMap(const Seqable *obj);
 static size_t countHashMap(const ICollection *ic);
+static const ICollection* emptyHashMap(void);
+static bool EquivHashMap(const ICollection*, const lisp_object*);
+static const IMap* assocHashMap(const IMap*, const lisp_object*, const lisp_object*);
+static const IMap* withoutHashMap(const IMap*, const lisp_object*);
+static const lisp_object* entryAtHashMap(const IMap*, const lisp_object*);
+static const IMap* consHashMap(const IMap*, const lisp_object*);
+static bool EqualsHashMap(const lisp_object *x, const lisp_object *y);
 
 Seqable_vtable HashMap_Seqable_vtable = {
 	seqHashMap // seq
@@ -194,16 +272,25 @@ Seqable_vtable HashMap_Seqable_vtable = {
 
 ICollection_vtable HashMap_ICollection_vtable = {
 	countHashMap,	// count
-	NULL,	// empty	// TODO
-	NULL,	//Equiv		// TODO
+	emptyHashMap,	// empty
+	EquivHashMap,	// Equiv	
+};
+
+IFn_vtable HashMap_IFn_vtable = {
+	invoke0AFn,	// invoke0
+	NULL,		// invoke1	// TODO
+	NULL,		// invoke2	// TODO
+	invoke3AFn,	// invoke3
+	invoke4AFn,	// invoke4
+	invoke5AFn,	// invoke5
+	NULL,		// applyTo	// TODO
 };
 
 IMap_vtable HashMap_IMap_vtable = {
-	NULL,	// assoc	// TODO
-	NULL,	// without	// TODO
-	NULL,	// count	// TODO
-	NULL,	// entryAt	// TODO
-	NULL,	// cons		// TODO
+	assocHashMap,	// assoc
+	withoutHashMap,	// without
+	entryAtHashMap,	// entryAt
+	consHashMap,	// cons	
 };
 
 interfaces HashMap_interfaces = {
@@ -212,12 +299,29 @@ interfaces HashMap_interfaces = {
 	&HashMap_ICollection_vtable,	// ICollectionFns
 	NULL,							// IStackFns
 	NULL,							// ISeqFns
+	&HashMap_IFn_vtable,			// IFnFns
 	NULL,							// IVectorFns
 	&HashMap_IMap_vtable,			// IMapFns
 };
 
-const HashMap _EmptyHashMap = {{HASHMAP_type, toString, NULL, &HashMap_interfaces}, 0, NULL, false, NULL};
+const HashMap _EmptyHashMap = {{HASHMAP_type, toString, NULL, EqualsHashMap, (IMap*)&_EmptyHashMap, &HashMap_interfaces}, 0, NULL, false, NULL};
 const HashMap *const EmptyHashMap = &_EmptyHashMap;
+
+// INode Function Definitions
+
+static const INode* createNode(__attribute__((unused)) bool edit, __attribute__((unused)) pthread_t thread_id, size_t shift, const lisp_object *key1, const lisp_object *val1, uint32_t key2hash, const lisp_object *key2, const lisp_object *val2) {
+	// TODO make this respect threads, which requires assoc_thread.
+	uint32_t key1hash = HashEq(key1);
+	if(key1hash == key2hash) {
+		const lisp_object *array[4] = {key1, val1, key2, val2};
+		return (INode*) NewCollisionNode(false, NULL, key1hash, 2, array);
+	}
+	const INode *ret = (INode*) EmptyBMINode;
+	bool addedLeaf = false;
+	ret = ret->fns->assoc(ret, shift, key1hash, key1, val1, &addedLeaf);
+	ret = ret->fns->assoc(ret, shift, key2hash, key2, val2, &addedLeaf);
+	return ret;
+}
 
 // BitmapIndexedNode Function Definitions
 
@@ -232,7 +336,7 @@ BitmapIndexedNode *NewBMINode(bool edit, pthread_t thread_id, uint32_t bitmap, s
 	return node;
 }
 
-INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf) {
+const INode* assocBitmapIndexed_Node(const INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf) {
 	assert(node->obj.type == BMI_NODE_type);
 	BitmapIndexedNode *BMI_node = (BitmapIndexedNode*)node;
 	uint32_t bit = bitpos(hash, shift);
@@ -244,7 +348,7 @@ INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, const 
 		const lisp_object *lookup_key = BMI_node->array[2*idx];
 		const lisp_object *lookup_val = BMI_node->array[2*idx+1];
 		if(lookup_key == NULL) {
-			INode *n = (INode*)lookup_val;
+			const INode *n = (INode*)lookup_val;
 			n = n->fns->assoc(n, shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
 			if((lisp_object*)n == lookup_val) {
 				return node;
@@ -262,31 +366,33 @@ INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, const 
 		}
 		*addedLeaf = true;
 		BMI_node = NewBMINode(false, (pthread_t)NULL, BMI_node->bitmap, BMI_node->count, BMI_node->array);
-		BMI_node->array[2*idx  ] = key;
-		BMI_node->array[2*idx+1] = val;
+		BMI_node->array[2*idx  ] = NULL;
+		BMI_node->array[2*idx+1] = (lisp_object*) createNode(true, pthread_self(), shift + NODE_LOG_SIZE, lookup_key, lookup_val, hash, key, val);
 		return (INode*)BMI_node;
 	} else {
 		size_t n = popcount(BMI_node->bitmap);
 		printf("n = %zd\n", n);
 		if(n >= 16) {
 			printf("n >= 16\n");
-			INode *nodes[NODE_SIZE];
+			const INode *nodes[NODE_SIZE];
+			memset(nodes, 0, sizeof(nodes));
 			uint32_t idx = mask(hash, shift);
-			nodes[idx] = assoc_BitmapIndexed_Node((INode*)EmptyBMINode, shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
+			nodes[idx] = assocBitmapIndexed_Node((INode*)EmptyBMINode, shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
 			size_t i, j;
 			for(i = j = 0; i < NODE_SIZE; i++) {
 				if((BMI_node->bitmap >> i) & 1) {
 					if(BMI_node->array[j] == NULL) {
 						nodes[i] = (INode*)BMI_node->array[j+1];
 					} else {
-						nodes[i] = assoc_BitmapIndexed_Node((INode*)EmptyBMINode, shift + NODE_LOG_SIZE, HashEq(BMI_node->array[j]),
+						nodes[i] = assocBitmapIndexed_Node((INode*)EmptyBMINode, shift + NODE_LOG_SIZE, HashEq(BMI_node->array[j]),
 															BMI_node->array[j], BMI_node->array[j+1], addedLeaf);
 					}
 					j += 2;
 				}
 			}
-			return (INode*)NewArrayNode(false, (pthread_t)NULL, n + 1, nodes);
-		} else {
+			return (const INode*)NewArrayNode(false, (pthread_t)NULL, n + 1, nodes);
+		}
+		else {
 			printf("n < 16\n");
 			const lisp_object *array[2*(n+1)];
 			memcpy(&array[0], BMI_node->array, 2 * idx * sizeof(lisp_object*));
@@ -299,7 +405,7 @@ INode* assoc_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, const 
 	}
 }
 
-INode* without_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_object *key) {
+const INode* without_BitmapIndexed_Node(const INode *node, size_t shift, uint32_t hash, const lisp_object *key) {
 	assert(node->obj.type == BMI_NODE_type);
 	BitmapIndexedNode *BMI_node = (BitmapIndexedNode*)node;
 	uint32_t bit = bitpos(hash, shift);
@@ -309,7 +415,7 @@ INode* without_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp
 	const lisp_object *lookup_key = BMI_node->array[2*idx];
 	if(lookup_key == NULL) {
 		const lisp_object *lookup_val = BMI_node->array[2*idx+1];
-		INode *n = (*(((INode*)lookup_val)->fns->without))((INode*)lookup_val, shift + NODE_LOG_SIZE, hash, key);
+		const INode *n = ((INode*)lookup_val)->fns->without((INode*)lookup_val, shift + NODE_LOG_SIZE, hash, key);
 		if((INode*)lookup_val == n)
 			return node;
 		if(n) {
@@ -320,8 +426,8 @@ INode* without_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp
 		if(BMI_node->bitmap == bit)
 			return NULL;
 		const lisp_object *array[BMI_node->count-2];
-		memcpy(array, &(BMI_node->array[0]), 2*idx);
-		memcpy(&(array[2*idx]), &(BMI_node->array[2*(idx+1)]), BMI_node->count - 2*(idx+1));
+		memcpy(array,			&(BMI_node->array[0]),			2*idx);
+		memcpy(&(array[2*idx]),	&(BMI_node->array[2*(idx+1)]),	BMI_node->count - 2*(idx+1));
 		return (INode*)NewBMINode(false, (pthread_t)NULL, BMI_node->bitmap ^ bit, BMI_node->count-2, array);
 	}
 	if(Equiv(key, lookup_key)) {
@@ -333,7 +439,7 @@ INode* without_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp
 	return node;
 }
 
-const MapEntry* find_BitmapIndexed_Node(INode *node, size_t shift, uint32_t hash, lisp_object *key) {
+const MapEntry* find_BitmapIndexed_Node(const INode *node, size_t shift, uint32_t hash, const lisp_object *key) {
 	assert(node->obj.type == BMI_NODE_type);
 	BitmapIndexedNode *BMI_node = (BitmapIndexedNode*)node;
 	uint32_t bit = bitpos(hash, shift);
@@ -363,9 +469,8 @@ const ISeq* nodeSeq_BitmapIndexed_Node(const INode *node) {
 
 // ArrayNode function Definitions.
 
-ArrayNode *NewArrayNode(bool edit, pthread_t thread_id, size_t count, INode **array) {
+ArrayNode *NewArrayNode(bool edit, pthread_t thread_id, size_t count, const INode **array) {
 	ArrayNode *node = GC_MALLOC(sizeof(*node));
-	memset(node, '\0', sizeof(*node));
 	node->obj.type = ARRAY_NODE_type;
 	node->fns = &ArrayNode_vtable;
 	node->edit = edit;
@@ -375,22 +480,28 @@ ArrayNode *NewArrayNode(bool edit, pthread_t thread_id, size_t count, INode **ar
 	return node;
 }
 
-INode* assocArrayNode(INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf) {
+const INode* assocArrayNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf) {
 	assert(node->obj.type == ARRAY_NODE_type);
 	ArrayNode *anode = (ArrayNode*)node;
 	uint32_t idx = mask(hash, shift);
+	printf("Inside assocArrayNode,\nidx = %u.\n", idx);
+	fflush(stdout);
 	assert(idx < NODE_SIZE);
-	INode *n = anode->array[idx];
+	const INode *n = anode->array[idx];
+	printf("n = %p.\n", (void*)n);
+	fflush(stdout);
 	if(n == NULL) {
-		INode *array[NODE_SIZE];
+		const INode *array[NODE_SIZE];
 		memcpy(&array[0], anode->array, NODE_SIZE * sizeof(INode*));
-		array[idx] = assoc_BitmapIndexed_Node((INode*)EmptyBMINode, shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
+		array[idx] = assocBitmapIndexed_Node((INode*)EmptyBMINode, shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
 		return (INode*)NewArrayNode(false, (pthread_t)NULL, anode->count+1, array);
 	}
-	INode *n2 = n->fns->assoc(n, shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
+	const INode *n2 = n->fns->assoc(n, shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
+	printf("n2 = %p.\n", (void*)n2);
+	fflush(stdout);
 	if(n == n2)
 		return node;
-	INode *array[NODE_SIZE];
+	const INode *array[NODE_SIZE];
 	memcpy(&array[0], anode->array, NODE_SIZE * sizeof(INode*));
 	array[idx] = n2;
 	return (INode*)NewArrayNode(false, (pthread_t)NULL, anode->count, array);
@@ -418,37 +529,37 @@ static INode* pack(ArrayNode *node, bool edit, pthread_t thread_id, size_t idx) 
 	return (INode*)NewBMINode(edit, thread_id, bitmap, 2*(node->count-1), array);
 }
 
-INode* without(INode *node, size_t shift, uint32_t hash, lisp_object *key) {
+const INode* withoutArrayNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key) {
 	assert(node->obj.type == ARRAY_NODE_type);
 	ArrayNode *anode = (ArrayNode*)node;
 	uint32_t idx = mask(hash, shift);
 	assert(idx < NODE_SIZE);
-	INode *n = anode->array[idx];
+	const INode *n = anode->array[idx];
 	if(n == NULL)
 		return node;
-	INode *n2 = n->fns->without(n, shift + NODE_LOG_SIZE, hash, key);
+	const INode *n2 = n->fns->without(n, shift + NODE_LOG_SIZE, hash, key);
 	if(n2 == n)
 		return node;
 	if(n2 == NULL) {
 		if(anode->count <= 8)
 			return pack(anode, anode->edit, anode->thread_id, idx);
-		INode *array[NODE_SIZE];
+		const INode *array[NODE_SIZE];
 		memcpy(&array[0], anode->array, NODE_SIZE * sizeof(INode*));
 		array[idx] = n2;
 		return (INode*)NewArrayNode(false, (pthread_t)NULL, anode->count-1, array);
 	}
-	INode *array[NODE_SIZE];
+	const INode *array[NODE_SIZE];
 	memcpy(&array[0], anode->array, NODE_SIZE * sizeof(INode*));
 	array[idx] = n2;
 	return (INode*)NewArrayNode(false, (pthread_t)NULL, anode->count, array);
 }
 
-const MapEntry* findArrayNode(INode *node, size_t shift, uint32_t hash, lisp_object *key) {
+const MapEntry* findArrayNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key) {
 	assert(node->obj.type == ARRAY_NODE_type);
 	ArrayNode *anode = (ArrayNode*)node;
 	uint32_t idx = mask(hash, shift);
 	assert(idx < NODE_SIZE);
-	INode *n = anode->array[idx];
+	const INode *n = anode->array[idx];
 	if(n == NULL)
 		return NULL;
 	return n->fns->find(n, shift + NODE_LOG_SIZE, hash, key);
@@ -457,9 +568,98 @@ const MapEntry* findArrayNode(INode *node, size_t shift, uint32_t hash, lisp_obj
 const ISeq* nodeSeq_ArrayNode(const INode *node) {
 	assert(node->obj.type == ARRAY_NODE_type);
 	ArrayNode *anode = (ArrayNode*)node;
-	return (const ISeq*) CreateNodeSeq((const lisp_object**) anode->array, NODE_SIZE, 0, NULL);
 
+	printf("In nodeSeq_ArrayNode.\n");
+	fflush(stdout);
+
+	return (const ISeq*) CreateArrayNodeSeq(&anode->array[0], 0, NULL);
+}
+
+// CollisionNode Function Definitions
+
+static CollisionNode *NewCollisionNode(bool edit, pthread_t thread_id, uint32_t hash, size_t count, const lisp_object **array) {
+	CollisionNode *node = GC_MALLOC(sizeof(*node) + 2 * count * sizeof(lisp_object*));
+	node->obj.type = COLLISIONNODE_type;
+	node->fns = &CollisionNode_vtable;
+	node->edit = edit;
+	node->thread_id = thread_id;
+	node->hash = hash;
+	node->count = count;
+	memcpy(node->array, array, 2 * count * sizeof(*array));
+	return node;
+}
+
+static const INode* assocCollisionNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key, const lisp_object *val, bool *addedLeaf) {
+	assert(node->obj.type == COLLISIONNODE_type);
+	CollisionNode *cnode = (CollisionNode*) node;
+
+	if(hash == cnode->hash) {
+		int idx = findIndex(cnode, key);
+		if(idx != -1) {
+			if(cnode->array[idx+1] == val)
+				return node;
+			CollisionNode *c = NewCollisionNode(false, NULL, hash, cnode->count, cnode->array);
+			c->array[idx+1] = val;
+		}
+		const lisp_object *array[2*(cnode->count + 1)];
+		memcpy(&array[0], cnode->array, 2 * cnode->count * sizeof(lisp_object*));
+		array[2*cnode->count  ] = key;
+		array[2*cnode->count+1] = val;
+		*addedLeaf = true;
+		return (INode*) NewCollisionNode(cnode->edit, cnode->thread_id, hash, cnode->count+1, array);
+	}
+	const lisp_object *array[2] = {NULL, (const lisp_object*)cnode};
+	INode *ret = (INode*) NewBMINode(false, NULL, hash, 2, array);
+	return ret->fns->assoc(ret, shift, hash, key, val, addedLeaf);
+}
+
+static const INode* withoutCollisionNode(const INode *node, __attribute__((unused)) size_t shift, uint32_t hash, const lisp_object *key) {
+	assert(node->obj.type == COLLISIONNODE_type);
+	CollisionNode *cnode = (CollisionNode*) node;
+
+	int i = findIndex(cnode, key);
+	if(i == -1)
+		return node;
+	if(cnode->count == 1)
+		return NULL;
+	const lisp_object *array[2*(cnode->count - 1)];
+	memcpy(array,		&(cnode->array[0]),		i);
+	memcpy(&(array[i]),	&(cnode->array[i+2]),	2*(cnode->count-1) - i);
+	return (INode*) NewCollisionNode(false, NULL, hash, cnode->count - 1, array);
+}
+
+static const MapEntry* findCollisionNode(const INode *node, __attribute__((unused)) size_t shift, __attribute__((unused)) uint32_t hash, const lisp_object *key) {
+	assert(node->obj.type == COLLISIONNODE_type);
+	CollisionNode *cnode = (CollisionNode*) node;
+
+	int i = findIndex(cnode, key);
+	if(i == -1)
+		return NULL;
+	if(Equiv(key, cnode->array[i])) {
+		MapEntry *ret = GC_MALLOC(sizeof(*ret));
+		ret->key = cnode->array[i];
+		ret->val = cnode->array[i+1];
+		return ret;
+	}
 	return NULL;
+}
+
+static const ISeq* nodeSeqCollisionNode(const INode *node) {
+	assert(node->obj.type == COLLISIONNODE_type);
+	CollisionNode *cnode = (CollisionNode*) node;
+
+	printf("In nodeSeqCollisionNode.\n");
+	fflush(stdout);
+
+	return (ISeq*) CreateNodeSeq(cnode->array, cnode->count, 0, NULL);
+}
+
+static int findIndex(const CollisionNode *cnode, const lisp_object *key) {
+	for(int i = 0; i<2*(int)cnode->count; i+=2) {
+		if(Equiv(key, cnode->array[i]))
+			return i;
+	}
+	return -1;
 }
 
 // NodeSeq Function Definitions.
@@ -490,6 +690,8 @@ const NodeSeq *CreateNodeSeq(const lisp_object **array, size_t count, size_t i, 
 
 	for(size_t j = i; j < count; j+=2) {
 		printf("In for loop with i = %zd, and j = %zd\n", i, j);
+		fflush(stdout);
+		printf("array[j] = %p.\n", (void*) array[j]);
 		fflush(stdout);
 		if(array[j]) return NewNodeSeq(array, count, j, NULL);
 		printf("array[j] is NULL.\n");
@@ -546,6 +748,50 @@ const ISeq* nextNodeSeq(const ISeq *o) {
 	return (ISeq*) CreateNodeSeq((const lisp_object**) ns->array, ns->count, ns->i+2, NULL);
 }
 
+// ArrayNodeSeq Function Definitions.
+
+const ArrayNodeSeq *NewArrayNodeSeq(const INode **array, size_t i, const ISeq *s) {
+	assert(i <= NODE_SIZE);
+	assert((s == NULL) || isISeq(&s->obj));
+	ArrayNodeSeq *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = ARRAYNODESEQ_type;
+	ret->obj.toString = toString;
+	ret->obj.fns = &ArrayNodeSeq_interfaces;
+
+	memcpy((void*)&(ret->i), &i, sizeof(i));
+	memcpy((void*)&(ret->s), &s, sizeof(s));
+	memcpy((void*) ret->array, array, NODE_SIZE * sizeof(*array));
+	return ret;
+}
+
+const ArrayNodeSeq *CreateArrayNodeSeq(const INode **array, size_t i, const ISeq *s) {
+	if(s) return NewArrayNodeSeq(array, i, s);
+
+	for(size_t j = i; j < NODE_SIZE; j++) {
+		const INode *node = array[j];
+		if(node) {
+			const ISeq *NodeSeq = node->fns->nodeSeq(node);
+			if(NodeSeq) return NewArrayNodeSeq(array, j+1, NodeSeq);
+		}
+	}
+
+	return NULL;
+}
+
+const lisp_object* firstArrayNodeSeq(const ISeq *o) {
+	assert(o->obj.type == ARRAYNODESEQ_type);
+	ArrayNodeSeq *ns = (ArrayNodeSeq*) o;
+
+	return ns->s->obj.fns->ISeqFns->first(ns->s);
+}
+
+const ISeq* nextArrayNodeSeq(const ISeq *o) {
+	assert(o->obj.type == ARRAYNODESEQ_type);
+	ArrayNodeSeq *ns = (ArrayNodeSeq*) o;
+
+	return (ISeq*) CreateArrayNodeSeq(ns->array, ns->i, ns->s->obj.fns->ISeqFns->next(ns->s));
+}
+
 // TransientHashMap Function Definitions.
 
 static const HashMap *asPersistent(TransientHashMap *thm) {
@@ -567,8 +813,8 @@ static TransientHashMap *assocTHM(TransientHashMap *thm, const lisp_object *key,
 
 	bool leafFlag = false;
 	if(thm->root == NULL) thm->root = (INode*)EmptyBMINode;
-	INode *n = thm->root->fns->assoc(thm->root, 0, HashEq(key), key, val, &leafFlag);
-	if(n != thm->root) thm->root = n;
+	const INode *n = thm->root->fns->assoc(thm->root, 0, HashEq(key), key, val, &leafFlag);
+	if(n != thm->root) thm->root = (INode*)n;
 	if(leafFlag) thm->count++;
 	return thm;
 }
@@ -590,7 +836,7 @@ const HashMap *CreateHashMap(size_t count, const lisp_object **entries) {
 	return result;
 }
 
-static const HashMap *NewHashMap(int count, INode* root, bool hasNull, const lisp_object *const nullValue) {
+static const HashMap *NewHashMap(int count, const INode* root, bool hasNull, const lisp_object *const nullValue) {
 	HashMap *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = HASHMAP_type;
 	ret->obj.toString = toString;
@@ -639,8 +885,97 @@ const ISeq *seqHashMap(const Seqable *obj) {
 	return hm->hasNull ? (const ISeq*) NewCons(hm->nullValue, s) : s;
 }
 
+static const ICollection* emptyHashMap(void) {
+	return (ICollection*) EmptyHashMap;
+}
+
+static bool EquivHashMap(const ICollection *ic, const lisp_object *obj) {
+	assert(ic->obj.type == HASHMAP_type);
+	const HashMap *hm = (const HashMap*) ic;
+
+	if(!isIMap(obj)) return false;
+
+	const IMap *im = (IMap*) obj;
+	if(im->obj.fns->ICollectionFns->count((const ICollection*)im) != hm->count) return false;
+
+	for(const ISeq *s = seqHashMap((const Seqable*)hm); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
+		const MapEntry *me =(const MapEntry*) s->obj.fns->ISeqFns->first(s);
+		const lisp_object *val = im->obj.fns->IMapFns->entryAt(im, me->key);
+		if(!Equiv(val, me->val)) return false;
+	}
+
+	return true;
+
+}
+
 static size_t countHashMap(const ICollection *ic) {
 	assert(ic->obj.type == HASHMAP_type);
 	const HashMap *hm = (const HashMap*) ic;
 	return hm->count;
+}
+
+static const IMap* assocHashMap(const IMap *im, const lisp_object *key, const lisp_object *val) {
+	assert(im->obj.type == HASHMAP_type);
+	const HashMap *hm = (const HashMap*) im;
+
+	if(key == NULL) {
+		if(hm->hasNull && hm->nullValue == val)
+			return im;
+		return (IMap*) NewHashMap(hm->hasNull ? hm->count : hm->count+1, hm->root, true, val);
+	}
+
+	bool addedLeaf = false;
+	const INode *newRoot = hm->root ? hm->root : (INode*) EmptyHashMap;
+	newRoot = newRoot->fns->assoc(newRoot, 0, HashEq(key), key, val, &addedLeaf);
+	if(newRoot == hm->root) return im;
+	return (IMap*) NewHashMap(hm->count + (addedLeaf ? 0 :1), newRoot, hm->hasNull, hm->nullValue);
+}
+
+static const IMap* withoutHashMap(const IMap *im, const lisp_object *key) {
+	assert(im->obj.type == HASHMAP_type);
+	const HashMap *hm = (const HashMap*) im;
+
+	if(key == NULL)
+		return hm->hasNull ? (IMap*) NewHashMap(hm->count - 1, hm->root, false, NULL) : im;
+	if(hm->root == NULL)
+		return im;
+
+	const INode *newRoot = hm->root;
+	newRoot = newRoot->fns->without(newRoot, 0, HashEq(key), key);
+
+	return (IMap*) NewHashMap(hm->count - 1, newRoot, hm->hasNull, hm->nullValue);
+}
+
+static const lisp_object* entryAtHashMap(const IMap *im, const lisp_object *key) {
+	assert(im->obj.type == HASHMAP_type);
+	const HashMap *hm = (const HashMap*) im;
+
+	if(key == NULL)
+		return hm->hasNull ? hm->nullValue : NULL;
+
+	return hm->root ? (lisp_object*) hm->root->fns->find(hm->root, 0, HashEq(key), key) : NULL;
+}
+
+static const IMap* consHashMap(const IMap *im, const lisp_object *obj) {
+	assert(im->obj.type == HASHMAP_type);
+	const HashMap *ret = (const HashMap*) im;
+
+	if(isIVector(obj)) {
+		const IVector* v = (const IVector*) obj;
+		if(v->obj.fns->ICollectionFns->count((ICollection*)v) != 2)
+			return (const IMap*) NewError(false, "Vector arg to map conj must be a pair");
+		return assocHashMap(im, v->obj.fns->IVectorFns->nth(v, 0, NULL), v->obj.fns->IVectorFns->nth(v, 1, NULL));
+	}
+
+	for(const ISeq *s = seq(obj); s != NULL; s->obj.fns->ISeqFns->next(s)) {
+		const MapEntry *me = (MapEntry*) s->obj.fns->ISeqFns->first(s);
+		ret = (HashMap*) assocHashMap((const IMap*) ret, me->key, me->val);
+	}
+
+	return (IMap*) ret;
+}
+
+static bool EqualsHashMap(const lisp_object *x, const lisp_object *y) {
+	// TODO EqualsHashMap
+	return EqualBase(x, y);
 }

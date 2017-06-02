@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "Error.h"
+#include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
 #include "gc.h"
 #include "List.h"
 #include "Map.h"
@@ -14,8 +14,8 @@
 #include "Strings.h"
 #include "Vector.h"
 
-lisp_object DONE_lisp_object = {DONE_type, NULL, NULL, NULL};
-lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL, NULL};
+lisp_object DONE_lisp_object = {DONE_type, NULL, NULL, NULL, NULL, NULL};
+lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL, NULL, NULL, NULL};
 
 typedef lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
 static MacroFn macros[128];

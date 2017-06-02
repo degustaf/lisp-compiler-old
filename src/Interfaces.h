@@ -29,13 +29,17 @@ typedef struct {	// ISeq
 	const lisp_object obj;
 } ISeq;
 
+typedef struct {	// IFn
+	const lisp_object obj;
+} IFn;
+
 typedef struct {	// IVector
 	const lisp_object obj;
 } IVector;
 
-typedef struct {	// IMap
+struct IMap_struct {
 	const lisp_object obj;
-} IMap;
+};
 
 // Virtual Tables of functions for Interfaces.
 
@@ -65,19 +69,29 @@ struct ISeq_vtable_struct {
 	const ISeq* (*cons)(const ISeq*, const lisp_object*);
 };
 
+struct IFn_vtable_struct {
+	const lisp_object* (*invoke0)(const IFn*);
+	const lisp_object* (*invoke1)(const IFn*, const lisp_object*);
+	const lisp_object* (*invoke2)(const IFn*, const lisp_object*, const lisp_object*);
+	const lisp_object* (*invoke3)(const IFn*, const lisp_object*, const lisp_object*, const lisp_object*);
+	const lisp_object* (*invoke4)(const IFn*, const lisp_object*, const lisp_object*, const lisp_object*, const lisp_object*);
+	const lisp_object* (*invoke5)(const IFn*, const lisp_object*, const lisp_object*, const lisp_object*, const lisp_object*, const lisp_object*);
+	// Clojure extends this out to 20 args, plus a variadic.  This should be sufficient.
+	const lisp_object* (*applyTo)(const IFn*, const ISeq*);
+};
+
 struct IVector_vtable_struct {
 	size_t (*length)(const IVector*);
 	const IVector* (*assocN)(const IVector*, size_t, const lisp_object*);
 	const IVector* (*cons)(const IVector*, const lisp_object*);
 	const IVector* (*assoc)(const IVector*, const lisp_object*, const lisp_object*);
-	const lisp_object* (*entryAt)(const IMap*, const lisp_object*);
-	const lisp_object* (*nth)(const IVector*, size_t, const lisp_object*);
+	const lisp_object* (*entryAt)(const IVector*, const lisp_object*);
+	const lisp_object* (*nth)(const IVector*, size_t n, const lisp_object *NotFound);
 };
 
 struct IMap_vtable_struct {
 	const IMap* (*assoc)(const IMap*, const lisp_object*, const lisp_object*);
 	const IMap* (*without)(const IMap*, const lisp_object*);
-	size_t (*count)(const IMap*);
 	const lisp_object* (*entryAt)(const IMap*, const lisp_object*);
 	const IMap* (*cons)(const IMap*, const lisp_object*);
 };
@@ -114,6 +128,10 @@ static inline bool isIStack(const lisp_object *obj) {
 static inline bool isISeq(const lisp_object *obj) {
 	printf("obj = %p\n", (void*)obj);
 	fflush(stdout);
+	printf("type = %d\n", obj->type);
+	fflush(stdout);
+	printf("%s.\n", object_type_string[obj->type]);
+	fflush(stdout);
 	printf("obj->fns = %p\n", (void*) obj->fns);
 	fflush(stdout);
 	bool ret = (bool)obj->fns->ISeqFns;
@@ -121,6 +139,10 @@ static inline bool isISeq(const lisp_object *obj) {
 		assert(isICollection(obj));
 	}
 	return ret;
+}
+
+static inline bool isIFn(const lisp_object *obj) {
+	return (bool)obj->fns->IFnFns;
 }
 
 static inline bool isIVector(const lisp_object *obj) {
@@ -132,9 +154,14 @@ static inline bool isIVector(const lisp_object *obj) {
 	return ret;
 }
 
-static inline bool isIMap(const lisp_object *obj) {
+static inline __attribute__((always_inline)) bool isIMap(const lisp_object *obj) {
 	bool ret = (bool)obj->fns->IMapFns;
 	if(ret) {
+		printf("obj = %p\n", (void*)obj);
+		fflush(stdout);
+		printf("obj->type = %d\n", obj->type);
+		fflush(stdout);
+		printf("%s\n", object_type_string[obj->type]);
 		assert(isICollection(obj));
 	}
 	return ret;

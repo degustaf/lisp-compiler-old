@@ -42,6 +42,7 @@ interfaces Cons_interfaces = {
 	&Cons_ICollection_vtable,	// ICollectionFns
 	NULL,						// IStackFns
 	&Cons_ISeq_vtable,			// ISeqFns
+	NULL,						// IFnFns
 	NULL,						// IVectorFns
 	NULL,						// IMapFns
 };

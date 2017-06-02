@@ -12,13 +12,14 @@ static const char *toStringEmptyList(const lisp_object *obj);
 static const lisp_object* firstList(const ISeq*);
 static const ISeq* nextList(const ISeq*);
 static const lisp_object *ListCopy(const lisp_object *obj);
+static size_t countList(const ICollection *ic);
 
 Seqable_vtable List_Seqable_vtable = {
 	seqASeq // seq
 };
 
 ICollection_vtable List_ICollection_vtable = {
-	NULL, // count	// TODO
+	countList, // count
 	emptyASeq, // empty
 	EquivASeq  // Equiv
 };
@@ -27,7 +28,7 @@ ISeq_vtable List_ISeq_vtable = {
 	firstList, // first
 	nextList, // next
 	moreASeq, // more
-	NULL, // cons	// TODO
+	consASeq, // cons
 };
 
 interfaces List_interfaces = {
@@ -36,6 +37,7 @@ interfaces List_interfaces = {
 	&List_ICollection_vtable,	// ICollection_vtable
 	NULL,						// IStack_vtable
 	&List_ISeq_vtable,			// ISeq_vtable
+	NULL,						// IFn_vtale
 	NULL,						// IVector_vtable
 	NULL,						// IMap_vtable
 };
@@ -47,7 +49,7 @@ struct List_struct {
     const size_t _count;
 };
     
-const List _EmptyList = {{LIST_type, toStringEmptyList, ListCopy, &List_interfaces}, NULL, NULL, 0};
+const List _EmptyList = {{LIST_type, toStringEmptyList, ListCopy, EqualBase, NULL, &List_interfaces}, NULL, NULL, 0};
 const List *const EmptyList = &_EmptyList;
 
 static const char *toStringEmptyList(const lisp_object *obj) {
@@ -72,7 +74,7 @@ const List *NewList(const lisp_object *const first) {
     List *ret = GC_MALLOC(sizeof(*ret));
     if(ret == NULL) return NULL;
 
-    List _ret = {{LIST_type, toString, ListCopy, &List_interfaces}, first, EmptyList, 1};
+    List _ret = {{LIST_type, toString, ListCopy, EqualBase, NULL, &List_interfaces}, first, EmptyList, 1};
     memcpy(ret, &_ret, sizeof(*ret));
 
     return ret;
@@ -81,7 +83,7 @@ const List *NewList(const lisp_object *const first) {
 const List *CreateList(size_t count, const lisp_object **entries) {
     List *ret = (List*)EmptyList;
     for(size_t i = 1; i <= count; i++) {
-        List _ret = {{LIST_type, toString, ListCopy, &List_interfaces},
+        List _ret = {{LIST_type, toString, ListCopy, EqualBase, NULL, &List_interfaces},
                      entries[count-i],
                      ret,
                      i};
@@ -104,4 +106,11 @@ static const ISeq* nextList(const ISeq *is) {
 
 	if(l->_count == 1) return NULL;
 	return (ISeq*) l->_rest;
+}
+
+static size_t countList(const ICollection *ic) {
+	assert(ic->obj.type == LIST_type);
+	const List *l = (List*) ic;
+
+	return l->_count;
 }

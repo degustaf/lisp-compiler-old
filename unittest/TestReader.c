@@ -1,9 +1,19 @@
+#include <stdarg.h>
 #include <string.h>
 
 #include "unity.h"
 
+#include "gc.h"
 #include "Reader.h"
 #include "Util.h"
+
+char *msg(char *restrict s, size_t n, const char *restrict format, ...) {
+	va_list argp;
+	va_start(argp, format);
+	vsnprintf(s, n, format, argp);
+	va_end(argp);
+	return s;
+}
 
 typedef struct test_data {
     char *input;
@@ -18,7 +28,7 @@ void tearDown(void) {
 }
 
 void test_read_integer(void) {
-    struct test_data data[] = {
+    test_data data[] = {
         { "0", "0"},
         { "1", "1"},
         { "+1", "1"},
@@ -61,7 +71,7 @@ void test_read_integer(void) {
     size_t count = sizeof(data)/sizeof(data[0]);
 
     for(size_t i=0; i<count; i++) {
-        struct test_data *d = &(data[i]);
+        test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
         const char *result = toString(ret);
@@ -71,7 +81,7 @@ void test_read_integer(void) {
 }
 
 void test_read_float(void) {
-    struct test_data data[] = {
+    test_data data[] = {
         { "3.3830102744703936e-74", "3.38301e-74"},
         { "-7.808793319244098e+180", "-7.80879e+180"},
         { "-1.116240615436433e+257", "-1.11624e+257"},
@@ -116,7 +126,7 @@ void test_read_float(void) {
     size_t count = sizeof(data)/sizeof(data[0]);
 
     for(size_t i=0; i<count; i++) {
-        struct test_data *d = &(data[i]);
+        test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
         const char *result = toString(ret);
@@ -126,7 +136,7 @@ void test_read_float(void) {
 }
 
 void test_read_char(void) {
-    struct test_data data[] = {
+    test_data data[] = {
         { "\\tab", "\t"},
         { "\\newline", "\n"},
         { "\\return", "\r"},
@@ -229,7 +239,7 @@ void test_read_char(void) {
     size_t count = sizeof(data)/sizeof(data[0]);
 
     for(size_t i=0; i<count; i++) {
-        struct test_data *d = &(data[i]);
+        test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
         const char *result = toString(ret);
@@ -239,14 +249,14 @@ void test_read_char(void) {
 }
 
 void test_read_string(void) {
-    struct test_data data[] = {
+    test_data data[] = {
         { "\"string\"", "string"},
         { "\"before\\tafter\"", "before\tafter"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
 
     for(size_t i=0; i<count; i++) {
-        struct test_data *d = &(data[i]);
+        test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
         const char *result = toString(ret);
@@ -256,7 +266,7 @@ void test_read_string(void) {
 }
 
 void test_read_list(void) {
-    struct test_data data[] = {
+    test_data data[] = {
         { "()", "()"},
         { "(1)", "(1)"},
         { "(1 2)", "(1 2)"},
@@ -268,11 +278,10 @@ void test_read_list(void) {
 	char err[256] = "";
 
     for(size_t i=0; i<count; i++) {
-        struct test_data *d = &(data[i]);
+        test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
-		snprintf(err, 256, "Expected List type.  Got %s.", object_type_string[ret->type]);
-		TEST_ASSERT_MESSAGE(ret->type == LIST_type, err);
+		TEST_ASSERT_MESSAGE(ret->type == LIST_type, msg(err, 256, "Expected List type.  Got %s.", object_type_string[ret->type]));
         const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
         fclose(stream);
@@ -280,7 +289,7 @@ void test_read_list(void) {
 }
 
 void test_read_vector(void) {
-    struct test_data data[] = {
+    test_data data[] = {
         { "[]", "[]"},
         { "[1]", "[1]"},
         { "[1 2]", "[1 2]"},
@@ -289,18 +298,17 @@ void test_read_vector(void) {
 			"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32]"},
 		{ "[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33]", 
 			"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33]"},
-		{"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]",
-			"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]"},
+		// {"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]",
+		// 	"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
 	char err[256] = "";
 
     for(size_t i=0; i<count; i++) {
-        struct test_data *d = &(data[i]);
+        test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
         lisp_object *ret = read(stream, false, '\0');
-		snprintf(err, 256, "Expected Vector type.  Got %s.", object_type_string[ret->type]);
-		TEST_ASSERT_MESSAGE(ret->type == VECTOR_type, err);
+		TEST_ASSERT_MESSAGE(ret->type == VECTOR_type, msg(err, 256, "Expected Vector type.  Got %s.", object_type_string[ret->type]));
         const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
         fclose(stream);
@@ -308,31 +316,37 @@ void test_read_vector(void) {
 }
 
 void test_read_map(void) {
-    struct test_data data[] = {
+    test_data data[] = {
         { "{}", "{}"},
-        { "{1 2}", "{1 2}"},
-        { "{1 2 3 4}", "{1 2, 3 4}"},
-        { "{1 2 3 4 5 6}", "{1 2, 3 4, 5 6}"},
-        { "{1 2 3 4 5 6 7 8}", "{7 8, 1 2, 3 4, 5 6}"},
-        // { "{1 2 3 4 5 6 7 8 9 10}", "{7 8, 1 2, 3 4, 5 6, 9 10}"},
+        { "{1 2}", "{,1 2,}"},
+        { "{1 2 3 4}", "{,1 2,3 4,}"},
+        { "{1 2 3 4 5 6}", "{,1 2,3 4,5 6,}"},
+        { "{1 2 3 4 5 6 7 8}", "{,1 2,3 4,5 6,7 8,}"},
+        { "{1 2 3 4 5 6 7 8 9 10}", "{,1 2,3 4,5 6,7 8,9 10,}"},
+        { "{1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80}",
+		 "{,1 2,3 4,5 6,7 8,9 10,11 12,13 14,15 16,17 18,19 20,21 22,23 24,25 26,27 28,29 30,31 32,33 34,35 36,37 38,39 40,41 42,43 44,45 46,47 48,49 50,51 52,53 54,55 56,57 58,59 60,61 62,63 64,65 66,67 68,69 70,71 72,73 74,75 76,77 78,79 80,}"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
 	char err[256] = "";
 
     for(size_t i=0; i<count; i++) {
-        struct test_data *d = &(data[i]);
+        test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
 		printf("Got stream.\n");
 		fflush(stdout);
         lisp_object *ret = read(stream, false, '\0');
 		printf("Got ret.\n");
 		fflush(stdout);
-		snprintf(err, 256, "Expected Map type.  Got %s.", object_type_string[ret->type]);
-		TEST_ASSERT_MESSAGE(ret->type == HASHMAP_type, err);
+		TEST_ASSERT_MESSAGE(ret->type == HASHMAP_type, msg(err, 256, "Expected Map type.  Got %s.", object_type_string[ret->type]));
         const char *result = toString(ret);
 		printf("Got result.\n");
 		fflush(stdout);
-        TEST_ASSERT_EQUAL_STRING(d->expected, result);
+		size_t len = strlen(d->expected);
+		char *expected_loc = GC_MALLOC_ATOMIC((len + 1) * sizeof(*expected_loc));
+		strncpy(expected_loc, d->expected, len+1);
+		for(char *tok = strtok(expected_loc, ","); tok != NULL; tok = strtok(NULL, ",")) {
+			TEST_ASSERT_NOT_NULL_MESSAGE(strstr(result, tok), msg(err, 256, "Could not find %s in %s.", tok, result));
+		}
         fclose(stream);
     }
 }

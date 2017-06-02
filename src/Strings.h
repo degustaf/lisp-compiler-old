@@ -7,6 +7,6 @@ typedef struct char_struct Char;
 typedef struct string_struct String;
 
 Char *NewChar(char ch);
-String *NewString(char *str);
+String *NewString(const char *str);
 
 #endif /* LISP_STRINGS_H */

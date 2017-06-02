@@ -55,7 +55,7 @@ static const lisp_object *StringCopy(const lisp_object *obj) {
     return (lisp_object*)NewString(str->str);
 }
 
-String *NewString(char *str) {
+String *NewString(const char *str) {
     String *ret = GC_MALLOC(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
 

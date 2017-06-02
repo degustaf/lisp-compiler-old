@@ -4,9 +4,11 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "AFn.h"
 #include "gc.h"
 #include "Interfaces.h"
 #include "lisp_pthread.h"
+#include "Util.h"
 
 #define LOG_NODE_SIZE 5
 #define NODE_SIZE (1 << LOG_NODE_SIZE)
@@ -27,7 +29,7 @@ static Node *NewNode(bool editable, pthread_t thread_id, size_t count, const lis
 static Node *editableRoot(const Node *const root);
 static Node *newPath(bool editable, pthread_t thread_id, size_t level, Node *node);
 
-const Node _EmptyNode = {{NODE_type, NULL, NULL, NULL}, false, 0, {NULL}};
+const Node _EmptyNode = {{NODE_type, NULL, NULL, NULL, NULL, NULL}, false, 0, {NULL}};
 const Node *const EmptyNode = &_EmptyNode;
 
 // TransientVector
@@ -61,7 +63,6 @@ static const Vector *asPersistent(TransientVector *v);
 // Vector Function Declarations.
 
 static const Vector *NewVector(size_t cnt, size_t shift, const Node *root, size_t count, const lisp_object* const* array);
-static const char *VectorToString(const lisp_object *obj);
 static const lisp_object *VectorCopy(const lisp_object *obj);
 static TransientVector *asTransient(const Vector *v);
 static size_t countVector(const ICollection *o);
@@ -88,26 +89,38 @@ IStack_vtable Vector_IStack_vtable = {
 	NULL,	// pop	// TODO
 };
 
+IFn_vtable Vector_IFn_vtable = {
+	invoke0AFn,	// invoke0
+	NULL,		// invoke1	// TODO
+	invoke2AFn,	// invoke2
+	invoke3AFn,	// invoke3
+	invoke4AFn,	// invoke4
+	invoke5AFn,	// invoke5
+	NULL,		// applyTo	// TODO
+};
+
 IVector_vtable Vector_IVector_vtable = {
 	NULL,	// length	// TODO
 	NULL,	// assocN	// TODO
 	NULL,	// cons		// TODO
 	NULL,	// assoc	// TODO
 	NULL,	// entryAt	// TODO
-	nthVector,	// nth		// TODO
+	nthVector,	// nth
 };
 
 interfaces Vector_interfaces = {
-	& Vector_Seqable_vtable,		// SeqableFns
-	& Vector_Reversible_vtable,		// ReversibleFns
-	& Vector_ICollection_vtable,	// ICollectionFns
-	& Vector_IStack_vtable,			// IStackFns
-	NULL,							// ISeqFns
-	& Vector_IVector_vtable,		// IVectorFns
-	NULL,							// IMapFns
+	&Vector_Seqable_vtable,		// SeqableFns
+	&Vector_Reversible_vtable,	// ReversibleFns
+	&Vector_ICollection_vtable,	// ICollectionFns
+	&Vector_IStack_vtable,		// IStackFns
+	NULL,						// ISeqFns
+	&Vector_IFn_vtable,			// IFnFns
+	&Vector_IVector_vtable,		// IVectorFns
+	NULL,						// IMapFns
 };
 
-const Vector _EmptyVector = {{VECTOR_type, VectorToString, VectorCopy, &Vector_interfaces},
+const Vector _EmptyVector = {{VECTOR_type, toString, VectorCopy, EqualBase, NULL, &Vector_interfaces},
+	// TODO EqualVector
                    0,
                    LOG_NODE_SIZE,
                    &_EmptyNode,
@@ -270,13 +283,8 @@ const Vector *CreateVector(size_t count, const lisp_object **entries) {
 	return asPersistent(trans);
 }
 
-static const char *VectorToString(__attribute__((unused)) const lisp_object *obj) {
-    // TODO
-    return NULL;
-}
-
 static const lisp_object *VectorCopy(__attribute__((unused)) const lisp_object *obj){
-    // TODO
+    // TODO		// VectorCopy
     return NULL;
 }
 

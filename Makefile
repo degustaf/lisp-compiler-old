@@ -66,12 +66,13 @@ LDLIBS =		-L$(GCLIB) -lgc -Wl,-rpath -Wl,/home/degustaf/lisp-compiler/build/gc/l
 
 DEPEND =		$(CC) $(CFLAGS) -MM -MG -MF
 RESULTS =		$(patsubst $(PATHT)Test%.c,$(PATHR)Test%.txt,$(SRCT))
-OBJS =			$(patsubst $(PATHS)%.c,$(PATHO)%.o,$(SRCS))
+OBJS =			$(filter-out $(PATHO)lisp.o, $(patsubst $(PATHS)%.c,$(PATHO)%.o,$(SRCS)))
 
 -include $(wildcard $(PATHD)*.txt)
 
 .PHONY: all
 .PHONY: clean
+.PHONY: clean-recur
 .PHONY: test
 .PHONY: functionaltest
 .PHONY: unittest
@@ -87,7 +88,7 @@ OBJS =			$(patsubst $(PATHS)%.c,$(PATHO)%.o,$(SRCS))
 all: unittest $(PATHB)lisp.$(TARGET_EXTENSION) functionaltest
 
 # $(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS) | $(LLVMCONFIG)
-$(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS) | $(GCLIB)
+$(PATHB)lisp.$(TARGET_EXTENSION): $(OBJS) $(PATHO)lisp.o | $(GCLIB)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 unittest: $(BUILD_PATHS) $(RESULTS)
@@ -107,27 +108,27 @@ functionaltest: $(PATHB)lisp.$(TARGET_EXTENSION)
 $(PATHR)%.txt: $(PATHB)%.$(TARGET_EXTENSION)
 	-./$< > $@ 2>&1
 
-$(PATHB)TestReader.$(TARGET_EXTENSION): $(PATHO)TestReader.o $(PATHO)Reader.o $(PATHUS)unity.o $(PATHO)Numbers.o $(PATHO)Strings.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Cons.o $(PATHO)Util.o \
-	$(PATHO)Murmur3.o $(PATHO)Error.o $(PATHO)StringWriter.o $(PATHO)Map.o $(PATHO)Vector.o | $(GCLIB)
-	# | $(LLVMCONFIG)
-	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
+# # | $(LLVMCONFIG)
+# $(PATHB)TestReader.$(TARGET_EXTENSION): $(PATHO)TestReader.o $(PATHO)Reader.o $(PATHUS)unity.o $(PATHO)Numbers.o $(PATHO)Strings.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Cons.o $(PATHO)Util.o \
+# 	$(PATHO)Murmur3.o $(PATHO)Error.o $(PATHO)StringWriter.o $(PATHO)Map.o $(PATHO)Vector.o $(PATHO)AFn.o | $(GCLIB)
+# 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
+# 
+# # | $(LLVMCONFIG)
+# $(PATHB)TestList.$(TARGET_EXTENSION): $(PATHO)TestList.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Util.o $(PATHO)Murmur3.o $(PATHO)Numbers.o $(PATHO)Map.o $(PATHO)Cons.o $(PATHO)StringWriter.o $(PATHUS)unity.o | $(GCLIB)
+# 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
-$(PATHB)TestList.$(TARGET_EXTENSION): $(PATHO)TestList.o $(PATHO)List.o $(PATHO)ASeq.o $(PATHO)Util.o $(PATHO)Murmur3.o $(PATHO)Numbers.o $(PATHO)Cons.o $(PATHO)StringWriter.o $(PATHUS)unity.o | $(GCLIB)
-	# | $(LLVMCONFIG)
-	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
-
-$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(PATHO)%.o $(PATHUS)unity.o | $(GCLIB)
-	# | $(LLVMCONFIG)
+# | $(LLVMCONFIG)
+$(PATHB)Test%.$(TARGET_EXTENSION): $(PATHO)Test%.o $(OBJS) $(PATHUS)unity.o | $(GCLIB)
 	$(LINK) -o $@ $^ $(LDLIBS) $(LDFLAGS)
 
 $(PATHB)Test%.$(TARGET_EXTENSION): $(PATHD)Test%.d
 
+# | $(LLVMINC) 
 $(PATHO)%.o:: $(PATHT)%.c | $(PATHU) $(GCINC)
-	# | $(LLVMINC) 
 	$(COMPILE) $(CFLAGS) $< -o $@
 
+# | $(LLVMINC)
 $(PATHO)%.o:: $(PATHS)%.c | $(GCINC)
-	# | $(LLVMINC)
 	$(COMPILE) $(CFLAGS) $< -o $@
 
 $(PATHUS)%.o:: $(PATHUS)%.c $(PATHUS)%.h | $(PATHU) $(GCINC)
@@ -153,6 +154,8 @@ clean:
 	$(CLEANUP) $(PATHO)*.o
 	$(CLEANUP) $(PATHB)*.$(TARGET_EXTENSION)
 	$(CLEANUP) $(PATHR)*.txt
+
+clean-recur: clean
 	$(CLEANDIR) $(GCBUILD)
 	cd $(GCSRC) && $(MAKE) clean
 

@@ -5,12 +5,25 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "Bool.h"
+#include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
 #include "Interfaces.h"
 #include "List.h"
 #include "Map.h"
 #include "Numbers.h"
 #include "Murmur3.h"
+#include "Symbol.h"
 #include "Vector.h"
+
+bool EqualBase(const lisp_object *x, const lisp_object *y) {
+	return x == y;
+}
+
+bool Equals(const lisp_object *x, const lisp_object *y) {
+	if(x == y)
+		return true;
+	return x && x->Equals(x, y);
+}
 
 bool Equiv(const lisp_object *x, const lisp_object *y) {
 	if(x == y)
@@ -19,10 +32,12 @@ bool Equiv(const lisp_object *x, const lisp_object *y) {
 		// TODO	Extend Equiv
 		// If x and y are Numbers.
 			// return Numbers.Equal(x, y)
-		// If x is PersistentCololection
-			// return x.equiv(y)
-		// If y is PersistentCollection
-			// return y.equiv(x)
+		if(isICollection(x)) {
+			return x->fns->ICollectionFns->Equiv((const ICollection*)x, y);
+		}
+		if(x && isICollection(y)) {
+			return y->fns->ICollectionFns->Equiv((const ICollection*)y, x);
+		}
 		// return x.equals(y)
 	}
 	return false;
@@ -45,13 +60,25 @@ uint32_t HashEq(const lisp_object *x) {
 			double y = FloatValue((Float*)x);
 			return hash32(&y, sizeof(y));
 		}
-		case LIST_type:		// TODO HashEq
-		case CONS_type:		// TODO HashEq
-		case NODESEQ_type:	// TODO HashEq
-		case HASHMAP_type:	// TODO HashEq
+		case SYMBOL_type: {
+			const Symbol *s = (Symbol*) x;
+			const char *name = getNameSymbol(s);
+			const char *ns = getNamespaceSymbol(s);
+			return hashCombine(hash32(name, strlen(name)), hash32(ns, strlen(ns)));
+		}
+		case LIST_type:			// TODO HashEq
+		case CONS_type:			// TODO HashEq
+		case NODESEQ_type:		// TODO HashEq
+		case ARRAYNODESEQ_type:	// TODO HashEq
+		case HASHMAP_type:		// TODO HashEq
+		case VECTOR_type:		// TODO HashEq
 		default:
 			return hash32(&x, sizeof(x));
 	}
+}
+
+uint32_t hashCombine(uint32_t x, uint32_t y) {
+	return x ^ (y + HASH_MIXER + (x << 6) + (x >> 2));
 }
 
 static void PrintObject(StringWriter *sw, const lisp_object *obj) {
@@ -128,6 +155,13 @@ static void PrintObject(StringWriter *sw, const lisp_object *obj) {
 		AddChar(sw, ']');
 		return;
 	}
+	printf("Not Vector\n");
+	printf("obj = %p\n", (void*)obj);
+	fflush(stdout);
+	printf("obj->type = %d\n", obj->type);
+	fflush(stdout);
+	printf("%s\n", object_type_string[obj->type]);
+	fflush(stdout);
 	AddString(sw, obj->toString(obj));
 }
 
@@ -137,4 +171,31 @@ const char *toString(const lisp_object *obj) {
 	StringWriter *sw = NewStringWriter();
 	PrintObject(sw, obj);
 	return WriteString(sw);
+}
+
+const lisp_object *get(const lisp_object *coll, const lisp_object *key, const lisp_object *NotFound) {
+	if(coll == NULL) return NULL;
+
+	const lisp_object *ret = NULL;
+	if(isIMap(coll)) {
+		ret = coll->fns->IMapFns->entryAt((IMap*)coll, key);
+	} else if(isIVector(coll)) {
+		ret = coll->fns->IVectorFns->entryAt((IVector*)coll, key);
+	}
+	return ret ? ret : NotFound;
+}
+
+const ISeq *seq(const lisp_object *obj) {
+	if(obj == NULL)
+		return NULL;
+	if(isSeqable(obj))
+		return obj->fns->SeqableFns->seq((const Seqable*) obj);
+
+	return (const ISeq*) NewError(0, "Don't know how to create ISeq from: %s.", object_type_string[obj->type]);
+}
+
+bool boolCast(const lisp_object *obj) {
+	if(obj->type == BOOL_type)
+		return obj == (lisp_object*)True;
+	return obj != NULL;
 }

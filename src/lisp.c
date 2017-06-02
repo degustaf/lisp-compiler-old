@@ -2,6 +2,9 @@
 #include <unistd.h>
 
 #include "Repl.h"
+#include "RunTime.h"
+#include "Symbol.h"
+#include "Var.h"
 
 void cmd_line_err(void) {
     printf("Usage: \n");
@@ -29,6 +32,11 @@ int main(int argc, char **argv) {
         }
     }
 
+	// const Symbol *lisp_main = internSymbol1("lisp.main");
+	const Var *require = RTVar("lisp.core", "require");
+	const Var *MAIN = RTVar("lisp.main", "main");
+
+	((const IFn*)require)->obj.fns->IFnFns->invoke1((const IFn*)require, (const lisp_object*)MAIN);
     repl(stdin);
 
     return 0;
