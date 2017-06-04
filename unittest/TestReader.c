@@ -298,8 +298,8 @@ void test_read_vector(void) {
 			"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32]"},
 		{ "[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33]", 
 			"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33]"},
-		// {"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]",
-		// 	"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]"},
+		{"[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]",
+		 "[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65]"},
     };
     size_t count = sizeof(data)/sizeof(data[0]);
 	char err[256] = "";
@@ -332,15 +332,9 @@ void test_read_map(void) {
     for(size_t i=0; i<count; i++) {
         test_data *d = &(data[i]);
         FILE *stream = fmemopen(d->input, strlen(d->input), "r");
-		printf("Got stream.\n");
-		fflush(stdout);
         lisp_object *ret = read(stream, false, '\0');
-		printf("Got ret.\n");
-		fflush(stdout);
 		TEST_ASSERT_MESSAGE(ret->type == HASHMAP_type, msg(err, 256, "Expected Map type.  Got %s.", object_type_string[ret->type]));
         const char *result = toString(ret);
-		printf("Got result.\n");
-		fflush(stdout);
 		size_t len = strlen(d->expected);
 		char *expected_loc = GC_MALLOC_ATOMIC((len + 1) * sizeof(*expected_loc));
 		strncpy(expected_loc, d->expected, len+1);

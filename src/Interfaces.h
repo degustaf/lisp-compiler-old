@@ -126,14 +126,6 @@ static inline bool isIStack(const lisp_object *obj) {
 }
 
 static inline bool isISeq(const lisp_object *obj) {
-	printf("obj = %p\n", (void*)obj);
-	fflush(stdout);
-	printf("type = %d\n", obj->type);
-	fflush(stdout);
-	printf("%s.\n", object_type_string[obj->type]);
-	fflush(stdout);
-	printf("obj->fns = %p\n", (void*) obj->fns);
-	fflush(stdout);
 	bool ret = (bool)obj->fns->ISeqFns;
 	if(ret) {
 		assert(isICollection(obj));
@@ -154,14 +146,9 @@ static inline bool isIVector(const lisp_object *obj) {
 	return ret;
 }
 
-static inline __attribute__((always_inline)) bool isIMap(const lisp_object *obj) {
+static inline bool isIMap(const lisp_object *obj) {
 	bool ret = (bool)obj->fns->IMapFns;
 	if(ret) {
-		printf("obj = %p\n", (void*)obj);
-		fflush(stdout);
-		printf("obj->type = %d\n", obj->type);
-		fflush(stdout);
-		printf("%s\n", object_type_string[obj->type]);
 		assert(isICollection(obj));
 	}
 	return ret;

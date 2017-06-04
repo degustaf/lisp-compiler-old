@@ -49,7 +49,7 @@ struct List_struct {
     const size_t _count;
 };
     
-const List _EmptyList = {{LIST_type, toStringEmptyList, ListCopy, EqualBase, NULL, &List_interfaces}, NULL, NULL, 0};
+const List _EmptyList = {{LIST_type, sizeof(List), toStringEmptyList, ListCopy, EqualBase, NULL, &List_interfaces}, NULL, NULL, 0};
 const List *const EmptyList = &_EmptyList;
 
 static const char *toStringEmptyList(const lisp_object *obj) {
@@ -74,7 +74,7 @@ const List *NewList(const lisp_object *const first) {
     List *ret = GC_MALLOC(sizeof(*ret));
     if(ret == NULL) return NULL;
 
-    List _ret = {{LIST_type, toString, ListCopy, EqualBase, NULL, &List_interfaces}, first, EmptyList, 1};
+    List _ret = {{LIST_type, sizeof(List), toString, ListCopy, EqualBase, NULL, &List_interfaces}, first, EmptyList, 1};
     memcpy(ret, &_ret, sizeof(*ret));
 
     return ret;
@@ -83,7 +83,7 @@ const List *NewList(const lisp_object *const first) {
 const List *CreateList(size_t count, const lisp_object **entries) {
     List *ret = (List*)EmptyList;
     for(size_t i = 1; i <= count; i++) {
-        List _ret = {{LIST_type, toString, ListCopy, EqualBase, NULL, &List_interfaces},
+        List _ret = {{LIST_type, sizeof(List), toString, ListCopy, EqualBase, NULL, &List_interfaces},
                      entries[count-i],
                      ret,
                      i};

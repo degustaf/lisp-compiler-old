@@ -51,6 +51,7 @@ const Cons *NewCons(const lisp_object *obj, const ISeq *s) {
 	assert(isISeq(&s->obj));
 	Cons *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = CONS_type;
+	ret->obj.size = sizeof(Cons);
 	ret->obj.fns = &Cons_interfaces;
 	ret->_first = obj;
 	ret->_more = s;

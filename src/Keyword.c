@@ -40,11 +40,11 @@ interfaces Keyword_interfaces = {
 	NULL,					// IMapFns
 };
 
-const Keyword _DocKW = {{KEYWORD_type, toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_DocSymbol};
+const Keyword _DocKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_DocSymbol};
 const Keyword *const DocKW = &_DocKW;
-const Keyword _macroKW = {{KEYWORD_type, toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_macroSymbol};
+const Keyword _macroKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_macroSymbol};
 const Keyword *const macroKW = &_macroKW;
-const Keyword _tagKW = {{KEYWORD_type, toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_tagSymbol};
+const Keyword _tagKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_tagSymbol};
 const Keyword *const tagKW = &_tagKW;
 
 const Keyword *internKeyword(const Symbol *s) {
@@ -93,6 +93,7 @@ const Keyword *findKeyword2(const char *ns, const char *name) {
 static const Keyword* NewKeyword(const Symbol* s) {
 	Keyword *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = KEYWORD_type;
+	ret->obj.size = sizeof(Keyword);
 	ret->obj.toString = toStringKeyword;
 	ret->obj.copy = NULL;	// TODO
 	ret->obj.Equals = EqualsKeyword;

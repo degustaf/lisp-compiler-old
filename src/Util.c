@@ -7,6 +7,7 @@
 
 #include "Bool.h"
 #include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
+#include "gc.h"
 #include "Interfaces.h"
 #include "List.h"
 #include "Map.h"
@@ -64,7 +65,7 @@ uint32_t HashEq(const lisp_object *x) {
 			const Symbol *s = (Symbol*) x;
 			const char *name = getNameSymbol(s);
 			const char *ns = getNamespaceSymbol(s);
-			return hashCombine(hash32(name, strlen(name)), hash32(ns, strlen(ns)));
+			return hashCombine(hash32(name, strlen(name)), hash32(ns, ns ? strlen(ns) : 0));
 		}
 		case LIST_type:			// TODO HashEq
 		case CONS_type:			// TODO HashEq
@@ -82,15 +83,11 @@ uint32_t hashCombine(uint32_t x, uint32_t y) {
 }
 
 static void PrintObject(StringWriter *sw, const lisp_object *obj) {
-	printf("In PrintObject\n");
-	fflush(stdout);
 	assert(sw);
 	if((void*) obj == (void*) EmptyList) {
 		AddString(sw, "()");
 		return;
 	}
-	printf("Not EmptyList\n");
-	fflush(stdout);
 	if(isISeq(obj)) {
 		assert(obj->fns->ISeqFns->next != NULL);
 		assert(obj->fns->ISeqFns->first != NULL);
@@ -106,29 +103,16 @@ static void PrintObject(StringWriter *sw, const lisp_object *obj) {
 		AddChar(sw, ')');
 		return;
 	}
-	printf("Not List\n");
-	fflush(stdout);
 	if(isIMap(obj)) {
-		printf("In map section.\n");
-		fflush(stdout);
 		if(obj->fns->ICollectionFns->count((const ICollection*)obj) == 0) {
-			printf("In empty map section.\n");
-			fflush(stdout);
 			AddString(sw, "{}");
 			return;
 		}
 
-		printf("After empty map section.\n");
-		fflush(stdout);
-
 		AddChar(sw, '{');
 
 		const ISeq *s = obj->fns->SeqableFns->seq((Seqable*)obj);
-		printf("got s\n");
-		fflush(stdout);
 		for(; s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
-			printf("In HashMaptoString for loop.\n");
-			fflush(stdout);
 			const MapEntry *e = (MapEntry*) s->obj.fns->ISeqFns->first(s);
 			PrintObject(sw, e->key);
 			AddChar(sw, ' ');
@@ -139,8 +123,6 @@ static void PrintObject(StringWriter *sw, const lisp_object *obj) {
 		AddChar(sw, '}');
 		return;
 	}
-	printf("Not Map\n");
-	fflush(stdout);
 	if(isIVector(obj)) {
 		if(obj == (const lisp_object*) EmptyVector) {
 			AddString(sw, "[]");
@@ -155,19 +137,10 @@ static void PrintObject(StringWriter *sw, const lisp_object *obj) {
 		AddChar(sw, ']');
 		return;
 	}
-	printf("Not Vector\n");
-	printf("obj = %p\n", (void*)obj);
-	fflush(stdout);
-	printf("obj->type = %d\n", obj->type);
-	fflush(stdout);
-	printf("%s\n", object_type_string[obj->type]);
-	fflush(stdout);
 	AddString(sw, obj->toString(obj));
 }
 
 const char *toString(const lisp_object *obj) {
-	printf("In toString\n");
-	fflush(stdout);
 	StringWriter *sw = NewStringWriter();
 	PrintObject(sw, obj);
 	return WriteString(sw);
@@ -198,4 +171,20 @@ bool boolCast(const lisp_object *obj) {
 	if(obj->type == BOOL_type)
 		return obj == (lisp_object*)True;
 	return obj != NULL;
+}
+
+const lisp_object *withMeta(const lisp_object *obj, const IMap *meta) {
+	lisp_object *ret = GC_MALLOC(obj->size);
+	memcpy(ret, obj, obj->size);
+	ret->meta = meta;
+	return ret;
+}
+
+size_t count(const lisp_object *obj) {
+	if(obj == NULL)
+		return 0;
+	if(isICollection(obj))
+		return obj->fns->ICollectionFns->count((ICollection*)obj);
+	// TODO // throw "Count not supported on this type."
+	return 0;
 }

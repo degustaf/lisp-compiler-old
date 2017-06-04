@@ -29,7 +29,7 @@ static Node *NewNode(bool editable, pthread_t thread_id, size_t count, const lis
 static Node *editableRoot(const Node *const root);
 static Node *newPath(bool editable, pthread_t thread_id, size_t level, Node *node);
 
-const Node _EmptyNode = {{NODE_type, NULL, NULL, NULL, NULL, NULL}, false, 0, {NULL}};
+const Node _EmptyNode = {{NODE_type, sizeof(Node), NULL, NULL, NULL, NULL, NULL}, false, 0, {NULL}};
 const Node *const EmptyNode = &_EmptyNode;
 
 // TransientVector
@@ -119,7 +119,7 @@ interfaces Vector_interfaces = {
 	NULL,						// IMapFns
 };
 
-const Vector _EmptyVector = {{VECTOR_type, toString, VectorCopy, EqualBase, NULL, &Vector_interfaces},
+const Vector _EmptyVector = {{VECTOR_type, sizeof(Vector), toString, VectorCopy, EqualBase, NULL, &Vector_interfaces},
 	// TODO EqualVector
                    0,
                    LOG_NODE_SIZE,
@@ -233,20 +233,14 @@ static const Vector *asPersistent(TransientVector *v) {
 // Vector Function Definitions.
 
 static const Vector *NewVector(size_t cnt, size_t shift, const Node *root, size_t count, const lisp_object* const* array) {
-	printf("In NewVector.\n");
-	fflush(stdout);
     Vector *ret = GC_MALLOC(sizeof(*ret));
 	assert(ret);
     memcpy(ret, EmptyVector, sizeof(*ret));
-	printf("Copied EmptyVector.\n");
-	fflush(stdout);
 	memcpy((void*) &ret->count, &cnt, sizeof(cnt));
 	memcpy((void*) &ret->shift, &shift, sizeof(shift));
 	memcpy((void*) &ret->root, &root, sizeof(root));
 	memcpy(ret->tail, array, count * sizeof(*array));
 
-	printf("Finished constructing newVector.\n");
-	fflush(stdout);
 	return ret;
 }
 
@@ -254,21 +248,12 @@ const Vector *CreateVector(size_t count, const lisp_object **entries) {
 	if(count == 0) return EmptyVector;
     Vector *ret = GC_MALLOC(sizeof(*ret));
     size_t cnt = count < NODE_SIZE ? count : NODE_SIZE;
-	printf("count = %zd, cnt = %zd\n", count, cnt);
-	fflush(stdout);
     memcpy(ret, EmptyVector, sizeof(*ret));
-	printf("Copied Empty Vector.\n");
-	fflush(stdout);
 	memcpy((void*) &ret->count, &cnt, sizeof(cnt));
-	printf("Set ret->count.\n");
-	fflush(stdout);
 
     for(size_t i = 0; i < cnt; i++) {
         ret->tail[i] = entries[i];
     }
-
-	printf("Performed first CreateVector loop.\n");
-	fflush(stdout);
 
     if(count <= NODE_SIZE)
         return ret;
@@ -276,9 +261,6 @@ const Vector *CreateVector(size_t count, const lisp_object **entries) {
     for(size_t i = NODE_SIZE; i < count; i++) {
 		trans = TransVecConj(trans, entries[i]);
     }
-
-	printf("Performed second CreateVector loop.\n");
-	fflush(stdout);
 
 	return asPersistent(trans);
 }

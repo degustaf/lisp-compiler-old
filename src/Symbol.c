@@ -43,17 +43,17 @@ interfaces Symbol_interfaces = {
 	NULL,				// IMapFns
 };
 
-const Symbol _DocSymbol = {{SYMBOL_type, toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "doc"};
-const Symbol _macroSymbol = {{SYMBOL_type, toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "macro"};
-const Symbol _tagSymbol = {{SYMBOL_type, toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "tag"};
+const Symbol _DocSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "doc"};
+const Symbol _macroSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "macro"};
+const Symbol _tagSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "tag"};
 
-const Symbol _DoSymbol = {{SYMBOL_type, toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "do"};
+const Symbol _DoSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "do"};
 const Symbol *const DoSymbol = &_DoSymbol;
-const Symbol _inNamespaceSymbol = {{SYMBOL_type, toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "inNamespace"};
+const Symbol _inNamespaceSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "inNamespace"};
 const Symbol *const inNamespaceSymbol = &_inNamespaceSymbol;
-const Symbol _loadFileSymbol = {{SYMBOL_type, toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "loadFile"};
+const Symbol _loadFileSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "loadFile"};
 const Symbol *const loadFileSymbol = &_loadFileSymbol;
-const Symbol _namespaceSymbol = {{SYMBOL_type, toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "namespace"};
+const Symbol _namespaceSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "namespace"};
 const Symbol *const namespaceSymbol = &_namespaceSymbol;
 
 const Symbol *internSymbol1(const char *nsname) {
@@ -96,6 +96,7 @@ const lisp_object* invoke2Symbol(const IFn *s, const lisp_object *arg1, const li
 const Symbol* newSymbol(const char *ns, const char *name) {
 	Symbol *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = SYMBOL_type;
+	ret->obj.size = sizeof(Symbol);
 	ret->obj.toString =	toStringSymbol;
 	// ret->obj.copy =		// TODO
 	ret->obj.fns = &Symbol_interfaces;

@@ -32,6 +32,9 @@ int main(int argc, char **argv) {
         }
     }
 
+	initRT();
+	printf("Finished initRT()\n");
+	fflush(stdout);
 	// const Symbol *lisp_main = internSymbol1("lisp.main");
 	const Var *require = RTVar("lisp.core", "require");
 	const Var *MAIN = RTVar("lisp.main", "main");

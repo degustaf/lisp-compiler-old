@@ -40,7 +40,7 @@ interfaces bootNS_interfaces = {
 	NULL,				// IVectorFns
 	NULL,				// IMapFns
 };
-const IFn bootNS = {{IFN_type, NULL, NULL, NULL, (IMap*)&_EmptyHashMap, &bootNS_interfaces}};
+const IFn bootNS = {{IFN_type, sizeof(IFn), NULL, NULL, NULL, (IMap*)&_EmptyHashMap, &bootNS_interfaces}};
 
 static const lisp_object *invokeInNS(const IFn *self, const lisp_object *arg1);
 IFn_vtable InNS_IFn_vtable = {
@@ -62,7 +62,7 @@ interfaces InNS_interfaces = {
 	NULL,				// IVectorFns
 	NULL,				// IMapFns
 };
-const IFn InNS = {{IFN_type, NULL, NULL, NULL, (IMap*)&_EmptyHashMap, &InNS_interfaces}};
+const IFn InNS = {{IFN_type, sizeof(IFn), NULL, NULL, NULL, (IMap*)&_EmptyHashMap, &InNS_interfaces}};
 
 static const lisp_object *invokeLoadFile(const IFn *self, const lisp_object *arg1);
 IFn_vtable LoadFile_IFn_vtable = {
@@ -84,7 +84,7 @@ interfaces LoadFile_interfaces = {
 	NULL,					// IVectorFns
 	NULL,					// IMapFns
 };
-const IFn LoadFile = {{IFN_type, NULL, NULL, NULL, (IMap*)&_EmptyHashMap, &LoadFile_interfaces}};
+const IFn LoadFile = {{IFN_type, sizeof(IFn), NULL, NULL, NULL, (IMap*)&_EmptyHashMap, &LoadFile_interfaces}};
 
 const Var* RTVar(const char *ns, const char *name) {
 	return internVar(findOrCreateNS(internSymbol2(NULL, ns)), internSymbol2(NULL, name), NULL, true);
@@ -119,6 +119,8 @@ void initRT(void) {
 	v = internVar(LISP_ns, loadFileSymbol, (lisp_object*)&LoadFile, true);
 	setMeta(v, (IMap*)CreateHashMap(4, args));
 
+	printf("About to load.\n");
+	fflush(stdout);
 	load("lisp/core", true);
 }
 
@@ -148,6 +150,8 @@ static void load(const char *scriptbase, bool failIfNotFound) {
 	bool loaded = false;
 	// dlopen objectFile
 	if(!loaded /* && ... */) {
+		printf("About to Enter loadResourceScript.\n");
+		fflush(stdout);
 		loadResourceScript(lispFile, true);
 	} else if(!loaded && failIfNotFound) {
 		// TODO Throw Error.
@@ -158,9 +162,11 @@ static void loadResourceScript(char *name, bool failIfNotFound) {
 	FILE *in = fopen(name, "r");
 	char *file = name;
 	for(char *ptr = strchr(file, '/'); ptr != NULL; ptr = strchr(file, '/'))
-		file = ptr;
+		file = ptr + 1;
 	if(in) {
 		// try
+		printf("About to enter compilerLoad.\n");
+		fflush(stdout);
 		compilerLoad(in, name, file);
 		// finally
 		fclose(in);

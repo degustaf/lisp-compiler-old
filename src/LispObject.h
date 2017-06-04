@@ -28,6 +28,7 @@
 	TYPE(UNBOUND_type) \
 	TYPE(VAR_type) \
 	TYPE(IFN_type) \
+	TYPE(EXPR_type) \
 \
 	/* Map types. */ \
 	TYPE(BMI_NODE_type) \
@@ -77,6 +78,7 @@ typedef struct IMap_struct IMap;
 
 typedef struct lisp_object_struct {
     object_type type;
+	size_t size;
 	const char *(*toString)(const struct lisp_object_struct *);
     const struct lisp_object_struct* (*copy)(const struct lisp_object_struct *);
 	bool (*Equals)(const struct lisp_object_struct *x, const struct lisp_object_struct *y);

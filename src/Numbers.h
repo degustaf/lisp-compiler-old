@@ -14,4 +14,12 @@ long IntegerValue(Integer *I);
 Float *NewFloat(double x);
 double FloatValue(Float *X);
 
+typedef struct {	// Number
+    lisp_object obj;
+} Number;
+
+static inline bool isNumber(const lisp_object *obj) {
+	return obj->type == INTEGER_type || obj->type == FLOAT_type;
+}
+
 #endif /* NUMBERS_H */

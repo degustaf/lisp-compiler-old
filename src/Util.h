@@ -26,4 +26,8 @@ const ISeq *seq(const lisp_object *obj);
 
 bool boolCast(const lisp_object *obj);
 
+const lisp_object *withMeta(const lisp_object *obj, const IMap *meta);
+
+size_t count(const lisp_object *obj);
+
 #endif /* LISP_UTIL_H */

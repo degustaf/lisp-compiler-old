@@ -14,8 +14,8 @@
 #include "Strings.h"
 #include "Vector.h"
 
-lisp_object DONE_lisp_object = {DONE_type, NULL, NULL, NULL, NULL, NULL};
-lisp_object NOOP_lisp_object = {NOOP_type, NULL, NULL, NULL, NULL, NULL};
+lisp_object DONE_lisp_object = {DONE_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
+lisp_object NOOP_lisp_object = {NOOP_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
 
 typedef lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
 static MacroFn macros[128];
@@ -52,13 +52,9 @@ lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRe
     int ch = getc(input);
 
     while(true) {
-		printf("In read loop.\n");
-		fflush(stdout);
         while(isspace(ch)){
             ch = getc(input);
         }
-		printf("Passed whitespace.\n");
-		fflush(stdout);
 
         if(ch == EOF) {
             if(EOF_is_error) {
@@ -66,29 +62,19 @@ lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRe
             }
             return (lisp_object*) NewError(true, "EOF while reading");
         }
-		printf("Passed EOF.\n");
-		fflush(stdout);
 
         if(ch == return_on) {
-			printf("found symbol %c to exit read.\n", ch);
-			fflush(stdout);
             return &DONE_lisp_object;
         }
-		printf("Passed return_on.\n");
-		fflush(stdout);
 
         MacroFn macro = get_macro(ch);
         if(macro) {
-			printf("Got macro for %c.\n", ch);
-			fflush(stdout);
             lisp_object *ret = macro(input, (char) ch);
             if(ret->type == NOOP_type) {
                 continue;
             }
             return ret;
         }
-		printf("Passed macro.\n");
-		fflush(stdout);
 
         if(ch == '+' || ch == '-') {
             int ch2 = getc(input);
@@ -97,18 +83,12 @@ lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRe
                 return ReadNumber(input, ch);
             }
         }
-		printf("Passed +/-.\n");
-		fflush(stdout);
 
         if(isdigit(ch)) {
             return ReadNumber(input, ch);
         }
-		printf("Passed digit.\n");
-		fflush(stdout);
 
         char* token = ReadToken(input, ch);
-		printf("Got token.\n");
-		fflush(stdout);
         lisp_object *ret = interpretToken(token);
         return ret;
     }
@@ -146,8 +126,6 @@ static lisp_object* ReadNumber(FILE *input, char ch) {
                 long ret_l = strtol(buffer, &endptr, 0);
                 if(errno == 0 && endptr == buffer + i) {
                     lisp_object *ret = (lisp_object*) NewInteger(ret_l);
-					printf("Returning %ld\n", ret_l);
-					fflush(stdout);
                     return ret;
                 }
                 errno = 0;
@@ -279,15 +257,11 @@ static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *co
 
     while(true) {
         lisp_object *form = read(input, true, delim);
-		printf("Got form of type %s.\n", object_type_string[form->type]);
-		fflush(stdout);
         if(form->type == EOF_type) return NULL;
         if(form == &DONE_lisp_object) {
             *count = i;
             return ret;
         }
-		printf("size = %zd, i = %zd\n", size, i);
-		fflush(stdout);
         if(size == i) {
             size *= 2;
             ret = GC_REALLOC(ret, size * sizeof(*ret));
@@ -309,8 +283,6 @@ static lisp_object *VectorReader(FILE* input, __attribute__((unused)) char ch /*
     size_t count;
     const lisp_object **list = ReadDelimitedList(input, ']', &count);
     if(list == NULL) return (lisp_object*) NewError(true, "");
-	printf("Creating Vector with a count of %zd.\n", count);
-	fflush(stdout);
 	return (lisp_object*) CreateVector(count, list);
 }
 
@@ -319,8 +291,6 @@ static lisp_object *MapReader(FILE* input, __attribute__((unused)) char ch /* *l
     const lisp_object **list = ReadDelimitedList(input, '}', &count);
     if(list == NULL) return (lisp_object*) NewError(true, "");
 	if(count & 1) return (lisp_object*) NewError(false, "Map literal must contain an even number of forms");
-	printf("Creating HashMap with a count of %zd.\n", count);
-	fflush(stdout);
     return (lisp_object*)CreateHashMap(count, list);
 }
 
