@@ -3,6 +3,7 @@
 #include <assert.h>
 
 #include "LispObject.h"
+#include "Compiler.h"
 #include "Reader.h"
 
 static void HandleTopLevelExpression(lisp_object *const current);
@@ -27,6 +28,7 @@ void repl(FILE *input) {
 
 static void HandleTopLevelExpression(lisp_object *const current) {
     if(current) {
-        printf("Parsed a top level expression: %s.\n", (*current->toString)(current));
+		const lisp_object *result = Eval(current);
+		printf("%s\n", result->toString(result));
     }
 }

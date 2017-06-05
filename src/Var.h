@@ -18,7 +18,7 @@ void setTag(Var *v, const Symbol *obj);
 void setMeta(Var *v, const IMap *m);
 void setMacro(Var *v);
 void setVar(Var *v, const lisp_object *val);
-bool isMacro(Var *v);
+bool isMacroVar(Var *v);
 Var *setDynamic(Var *v);
 Var *setDynamic1(Var *v, bool b);
 bool isDynamic(const Var *v);

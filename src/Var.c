@@ -205,7 +205,7 @@ void setVar(Var *v, const lisp_object *val) {
 	dval = NewFrame(m->obj.fns->IMapFns->assoc(m, (lisp_object*)v, val), dval->prev);
 }
 
-bool isMacro(Var *v) {
+bool isMacroVar(Var *v) {
 	const IMap *m = v->obj.meta;
 	return boolCast(m->obj.fns->IMapFns->entryAt(m, (lisp_object*)macroKW));
 }

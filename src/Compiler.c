@@ -282,6 +282,27 @@ static const Expr* parseMapExpr(Expr_Context context, const IMap *form) {
 	return (Expr*)ret;
 }
 
+typedef const Expr* (*IParser)(Expr_Context context, const lisp_object *form);
+typedef struct {	// Special
+	const Symbol *sym;
+	IParser parse;
+} Special;
+const Special specials[] = {
+	{&_DefSymbol, NULL},
+};
+const size_t special_count = sizeof(specials)/sizeof(specials[0]);
+IParser isSpecial(const lisp_object *sym) {
+	if(sym == NULL)
+		return NULL;
+	if(sym->type != SYMBOL_type)
+		return NULL;
+	bool (*Equals)(const struct lisp_object_struct *x, const struct lisp_object_struct *y) = ((lisp_object*)sym)->Equals;
+	for(size_t i =0; i<special_count; i++) {
+		if(Equals((lisp_object*)sym, (lisp_object*)specials[i].sym))
+			return specials[i].parse;
+	}
+	return NULL;
+}
 
 
 
@@ -292,9 +313,16 @@ static void consumeWhitespace(FILE *input) {
 	ungetc(ch, input);
 }
 
-static const lisp_object* macroExpand1(const lisp_object *form) {
+static const lisp_object* macroExpand1(const lisp_object *x) {
+	if(!isISeq(x))
+		return x;
+	const ISeq *form = (ISeq*)x;
+	const lisp_object *op = form->obj.fns->ISeqFns->first(form);
+	if(isSpecial(op))
+		return x;
+	// const Var *v = isMacro(op);
 	// TODO macroExpand1
-	return form;
+	return (lisp_object*)form;
 }
 
 static const lisp_object* macroExpand(const lisp_object *form) {
@@ -304,14 +332,31 @@ static const lisp_object* macroExpand(const lisp_object *form) {
 	return form;
 }
 
-static const Expr* AnalyzeSeq(Expr_Context context, const lisp_object *form, char *name) {
-	const lisp_object *me = macroExpand1(form);
-	if(me != form)
+static const Expr* AnalyzeSeq(Expr_Context context, const ISeq *form, char *name) {
+	const lisp_object *me = macroExpand1((lisp_object*)form);
+	if(me != (lisp_object*)form)
 		return Analyze(context, me, name);
-	// TODO
+
+	const lisp_object *op = form->obj.fns->ISeqFns->first(form);
+	if(op == NULL) {
+		// Throw new IllegalArgumentException("Can't call nil, form: " + form);
+		return NULL;
+	}
+	// const ISeq *next = form->obj.fns->ISeqFns->next(form);
+	// IFn *inlined = isInline(op, next->obj.fns->ICollectionFns->count((ICollection*)next));	// TODO isInline
+	// if(inlined != NULL)
+	// 	return Analyze(context, preserveTag(form, inlined->obj.fns->IFnFns->applyTo(inlined, next)), name);	// TODO preserveTag
+	if(((lisp_object*)FNSymbol)->Equals((lisp_object*)FNSymbol, op)) {
+		// TODO return FnExpr.parse(context, form, name);
+	}
+	if(op->type == SYMBOL_type ) {
+		IParser p = isSpecial(op);
+		if(p) return p(context, (lisp_object*)form);
+	}
+	// TODO return InvokeExpr.parse(context, form);
 }
 
-static const Expr* Analyze(Expr_Context context, const lisp_object *form, char *name) {
+static const Expr* Analyze(Expr_Context context, const lisp_object *form, __attribute__((unused)) char *name) {
 	// TODO if form is LazySeq, convert form to Seq.
 	if(form == NULL) {
 		return NilExpr;
@@ -356,8 +401,7 @@ static const Expr* Analyze(Expr_Context context, const lisp_object *form, char *
 	return NewConstantExpr(form);
 }
 
-static const lisp_object* Eval(const lisp_object *form) {
-	// https://github.com/clojure/clojure/blob/master/src/jvm/clojure/lang/Compiler.java#L6971
+const lisp_object* Eval(const lisp_object *form) {
 	form = macroExpand(form);
 	if(isISeq(form)) {
 		const ISeq *s = (ISeq*)form;
@@ -378,7 +422,16 @@ const lisp_object* compilerLoad(FILE *reader, __attribute__((unused)) const char
 	// size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
 	// TODO pushThreadBindings
 	// try
-	for(const lisp_object *r = read(reader, true, '\0'); r->type != EOF_type; r = read(reader, true, '\0')) {
+	for(const lisp_object *r = read(reader, false, '\0'); r->type != EOF_type; r = read(reader, false, '\0')) {
+		printf("in compilerLoad loop.\n");
+		printf("r = %p\n", (void*)r);
+		printf("r->type = %d\n", r->type);
+		printf("r->type = %s\n", object_type_string[r->type]);
+		fflush(stdout);
+		if(r->type == ERROR_type) {
+			fprintf(stderr, "Error: %s\n", toString(r));
+			break;
+		}
 		// TODO
 		ret = Eval(r);
 	}

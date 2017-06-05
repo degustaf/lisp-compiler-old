@@ -36,11 +36,11 @@ int main(int argc, char **argv) {
 	printf("Finished initRT()\n");
 	fflush(stdout);
 	// const Symbol *lisp_main = internSymbol1("lisp.main");
-	const Var *require = RTVar("lisp.core", "require");
-	const Var *MAIN = RTVar("lisp.main", "main");
+	__attribute__((unused)) const Var *require = RTVar("lisp.core", "require");
+	__attribute__((unused)) const Var *MAIN = RTVar("lisp.main", "main");
 
-	((const IFn*)require)->obj.fns->IFnFns->invoke1((const IFn*)require, (const lisp_object*)MAIN);
-    repl(stdin);
+	// ((const IFn*)require)->obj.fns->IFnFns->invoke1((const IFn*)require, (const lisp_object*)MAIN);
+	repl(stdin);
 
-    return 0;
+	return 0;
 }

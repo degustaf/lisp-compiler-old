@@ -88,6 +88,12 @@ static void PrintObject(StringWriter *sw, const lisp_object *obj) {
 		AddString(sw, "()");
 		return;
 	}
+	printf("obj = %p\n", (void*)obj);
+	fflush(stdout);
+	printf("obj->type = %d\n", obj->type);
+	fflush(stdout);
+	printf("obj->type = %s\n", object_type_string[obj->type]);
+	fflush(stdout);
 	if(isISeq(obj)) {
 		assert(obj->fns->ISeqFns->next != NULL);
 		assert(obj->fns->ISeqFns->first != NULL);

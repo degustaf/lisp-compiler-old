@@ -43,12 +43,15 @@ interfaces Symbol_interfaces = {
 	NULL,				// IMapFns
 };
 
+const Symbol _DefSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "def"};
 const Symbol _DocSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "doc"};
 const Symbol _macroSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "macro"};
 const Symbol _tagSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "tag"};
 
 const Symbol _DoSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "do"};
 const Symbol *const DoSymbol = &_DoSymbol;
+const Symbol _FNSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "fn*"};
+const Symbol *const FNSymbol = &_FNSymbol;
 const Symbol _inNamespaceSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "inNamespace"};
 const Symbol *const inNamespaceSymbol = &_inNamespaceSymbol;
 const Symbol _loadFileSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "loadFile"};
