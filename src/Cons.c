@@ -6,6 +6,7 @@
 #include "ASeq.h"
 #include "gc.h"
 #include "List.h"
+#include "Util.h"
 
 
 struct Cons_struct {
@@ -24,9 +25,10 @@ Seqable_vtable Cons_Seqable_vtable = {
 };
 
 ICollection_vtable Cons_ICollection_vtable = {
-	countCons,	// count
-	emptyASeq,	// empty
-	EquivASeq	// Equiv
+	countCons,					// count
+	(ICollectionFn1)consASeq,	// cons
+	emptyASeq,					// empty
+	EquivASeq					// Equiv
 };
 
 ISeq_vtable Cons_ISeq_vtable = {
@@ -52,6 +54,10 @@ const Cons *NewCons(const lisp_object *obj, const ISeq *s) {
 	Cons *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = CONS_type;
 	ret->obj.size = sizeof(Cons);
+	ret->obj.toString = toString;
+	ret->obj.copy = NULL;	// TODO copyCons
+	ret->obj.Equals = NULL;	// TODO EqualsCons
+	ret->obj.meta = NULL;	// TODO meta for Cons
 	ret->obj.fns = &Cons_interfaces;
 	ret->_first = obj;
 	ret->_more = s;

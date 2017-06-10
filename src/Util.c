@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "Bool.h"
+#include "Cons.h"
 #include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
 #include "gc.h"
 #include "Interfaces.h"
@@ -173,6 +174,57 @@ const ISeq *seq(const lisp_object *obj) {
 	return (const ISeq*) NewError(0, "Don't know how to create ISeq from: %s.", object_type_string[obj->type]);
 }
 
+const lisp_object *first(const lisp_object *x) {
+	if(isISeq(x)) {
+		const ISeq *s = (ISeq*)x;
+		return s->obj.fns->ISeqFns->first(s);
+	}
+	const ISeq *s = seq(x);
+	if(s)
+		return s->obj.fns->ISeqFns->first(s);
+	return NULL;
+}
+
+const lisp_object *second(const lisp_object *x) {
+	return first((lisp_object*)next(x));
+}
+
+const ISeq *next(const lisp_object *x) {
+	if(isISeq(x)) {
+		const ISeq *s = (ISeq*)x;
+		return s->obj.fns->ISeqFns->next(s);
+	}
+	const ISeq *s = seq(x);
+	if(s)
+		return s->obj.fns->ISeqFns->next(s);
+	return NULL;
+}
+
+const ISeq* cons(const lisp_object *x, const lisp_object *coll) {
+	if(coll == NULL)
+		return (ISeq*)NewList(x);
+	if(isISeq(coll))
+		return (ISeq*) NewCons(x, (ISeq*)coll);
+	return (ISeq*) NewCons(x, seq(coll));
+}
+
+const ICollection* conj_(const ICollection *coll, const lisp_object *x) {
+	if(coll)
+		return coll->obj.fns->ICollectionFns->cons(coll, x);
+	return (ICollection*)NewList(x);
+}
+
+const lisp_object* assoc(const lisp_object *coll, const lisp_object *key, const lisp_object *val) {
+	if(coll) {
+		if(isIMap(coll))
+			return (lisp_object*)coll->fns->IMapFns->assoc((IMap*)coll, key, val);
+		if(isIVector(coll))
+			return (lisp_object*)coll->fns->IVectorFns->assoc((IVector*)coll, key, val);
+		// Throw "Cannot use assoc on coll"
+	}
+	return (lisp_object*)((IMap*)EmptyHashMap)->obj.fns->IMapFns->assoc((IMap*)EmptyHashMap, key, val);
+}
+
 bool boolCast(const lisp_object *obj) {
 	if(obj->type == BOOL_type)
 		return obj == (lisp_object*)True;
@@ -193,4 +245,24 @@ size_t count(const lisp_object *obj) {
 		return obj->fns->ICollectionFns->count((ICollection*)obj);
 	// TODO // throw "Count not supported on this type."
 	return 0;
+}
+
+const ISeq* listStar1(const lisp_object *arg1, const ISeq *rest) {
+	return cons(arg1, (lisp_object*)rest);
+}
+
+const ISeq* listStar2(const lisp_object *arg1, const lisp_object *arg2, const ISeq *rest) {
+	return cons(arg1, (lisp_object*)cons(arg2, (lisp_object*)rest));
+}
+
+const ISeq* listStar3(const lisp_object *arg1, const lisp_object *arg2, const lisp_object *arg3, const ISeq *rest) {
+	return cons(arg1, (lisp_object*)cons(arg2, (lisp_object*)cons(arg3, (lisp_object*)rest)));
+}
+
+const ISeq* listStar4(const lisp_object *arg1, const lisp_object *arg2, const lisp_object *arg3, const lisp_object *arg4, const ISeq *rest) {
+	return cons(arg1, (lisp_object*)cons(arg2, (lisp_object*)cons(arg3, (lisp_object*)cons(arg4, (lisp_object*)rest))));
+}
+
+const ISeq* listStar5(const lisp_object *arg1, const lisp_object *arg2, const lisp_object *arg3, const lisp_object *arg4, const lisp_object *arg5, const ISeq *rest) {
+	return cons(arg1, (lisp_object*)cons(arg2, (lisp_object*)cons(arg3, (lisp_object*)cons(arg4, (lisp_object*)cons(arg5, (lisp_object*)rest)))));
 }

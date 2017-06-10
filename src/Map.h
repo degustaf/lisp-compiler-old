@@ -4,6 +4,7 @@
 #include "LispObject.h"
 
 typedef struct {
+	lisp_object obj;
 	const lisp_object *key;
 	const lisp_object *val;
 } MapEntry;

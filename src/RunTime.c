@@ -16,6 +16,8 @@ Namespace *LISP_ns = NULL;
 Var *OUT = NULL;
 Var *Current_ns = NULL;
 Var *AGENT = NULL;
+Var *NS_Var = NULL;
+Var *IN_NS_Var = NULL;
 
 static void load(const char *scriptbase, bool failIfNotFound);
 static void loadResourceScript(char *name, bool failIfNotFound);
@@ -103,8 +105,8 @@ void initRT(void) {
 	setMeta(AGENT, (IMap*)CreateHashMap(2, args));
 
 	// MATH_CONTEXT			// TODO
-	Var *v = internVar(LISP_ns, namespaceSymbol, (lisp_object*)&bootNS, true);
-	setMacro(v);
+	NS_Var = internVar(LISP_ns, namespaceSymbol, (lisp_object*)&bootNS, true);
+	setMacro(NS_Var);
 
 	const Keyword *arglistkw = internKeyword2(NULL, "arglists");
 	const Symbol *nameSym = internSymbol1("name");
@@ -112,12 +114,13 @@ void initRT(void) {
 	args[2] = (lisp_object*)arglistkw;
 	const Vector *vec = CreateVector(1, (const lisp_object**)&nameSym);
 	args[3] = (lisp_object*) CreateList(1, (const lisp_object**)&vec);
-	v = internVar(LISP_ns, inNamespaceSymbol, (lisp_object*)&InNS, true);
-	setMeta(v, (IMap*)CreateHashMap(4, args));
+	IN_NS_Var = internVar(LISP_ns, inNamespaceSymbol, (lisp_object*)&InNS, true);
+	setMeta(IN_NS_Var, (IMap*)CreateHashMap(4, args));
 
 	args[1] = (lisp_object*)NewString("Sequentially read and evaluate the set of forms contained in the file.");
-	v = internVar(LISP_ns, loadFileSymbol, (lisp_object*)&LoadFile, true);
+	Var *v = internVar(LISP_ns, loadFileSymbol, (lisp_object*)&LoadFile, true);
 	setMeta(v, (IMap*)CreateHashMap(4, args));
+	initCompiler();
 
 	printf("About to load.\n");
 	fflush(stdout);

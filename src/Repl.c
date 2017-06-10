@@ -6,13 +6,13 @@
 #include "Compiler.h"
 #include "Reader.h"
 
-static void HandleTopLevelExpression(lisp_object *const current);
+static void HandleTopLevelExpression(const lisp_object *const current);
 
 void repl(FILE *input) {
-    init_macros();
+    init_reader();
     for(;;) {
         printf("Lisp>");
-        lisp_object *current = read(input, false, '\0');
+        const lisp_object *current = read(input, false, '\0');
 		assert(current);
 		switch(current->type) {
             case EOF_type:
@@ -26,7 +26,7 @@ void repl(FILE *input) {
     }
 }
 
-static void HandleTopLevelExpression(lisp_object *const current) {
+static void HandleTopLevelExpression(const lisp_object *const current) {
     if(current) {
 		const lisp_object *result = Eval(current);
 		printf("%s\n", result->toString(result));

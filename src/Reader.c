@@ -3,21 +3,30 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <regex.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "Bool.h"
+#include "Compiler.h"
 #include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
 #include "gc.h"
+#include "Keyword.h"
 #include "List.h"
 #include "Map.h"
+#include "Namespace.h"
 #include "Numbers.h"
 #include "Strings.h"
+#include "Symbol.h"
+#include "Util.h"
 #include "Vector.h"
 
 lisp_object DONE_lisp_object = {DONE_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
 lisp_object NOOP_lisp_object = {NOOP_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
 
-typedef lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
+regex_t symbol_regex;
+
+typedef const lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
 static MacroFn macros[128];
 
 // Static Function Declarations.
@@ -26,18 +35,21 @@ static bool isMacro(int ch);
 static bool isTerminatingMacro(int ch);
 static lisp_object *ReadNumber(FILE *input, char ch);
 static char *ReadToken(FILE *input, char ch);
-static lisp_object *interpretToken(char *token);         // Needs to be implemented.
+static const lisp_object *interpretToken(const char *token);
 static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */);
 
 // Macros
-static lisp_object *CharReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static lisp_object *ListReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static lisp_object *VectorReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static lisp_object *MapReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static lisp_object *StringReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static lisp_object *UnmatchedParenReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *CharReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *ListReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *VectorReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *MapReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *StringReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *UnmatchedParenReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *WrappingReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *CommentReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *MetaReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
 
-void init_macros() {
+void init_reader() {
     macros['\\'] = CharReader;
     macros['"']  = StringReader;
     macros['(']  = ListReader;
@@ -46,9 +58,26 @@ void init_macros() {
     macros[']']  = UnmatchedParenReader;
     macros['{']  = MapReader;
     macros['}']  = UnmatchedParenReader;
+	macros['\''] = WrappingReader;
+	// macros['@']  = WrappingReader;
+	macros[';']  = CommentReader;
+	macros['^'] = MetaReader;
+
+	// macros['`'] = new SyntaxQuoteReader();
+	// macros['~'] = new UnquoteReader();
+	// macros['%'] = new ArgReader();
+	// macros['#'] = new DispatchReader();
+
+	const char *const pattern = ":?\\([^[:digit:]/].*/i\\)?\\(/|[^[:digit:]/][^/]*\\)";		// [:]?([\\D&&[^/]].*/)?(/|[\\D&&[^/]][^/]*)
+	int i = regcomp(&symbol_regex, pattern, 0);
+	if(i) {
+		fprintf(stderr, "Unable to compile regex pattern: %s\n", pattern);
+		exit(i);
+	}
+	
 }
 
-lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
+const lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
     int ch = getc(input);
 
     while(true) {
@@ -69,7 +98,7 @@ lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRe
 
         MacroFn macro = get_macro(ch);
         if(macro) {
-            lisp_object *ret = macro(input, (char) ch);
+            const lisp_object *ret = macro(input, (char) ch);
             if(ret->type == NOOP_type) {
                 continue;
             }
@@ -89,7 +118,7 @@ lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRe
         }
 
         char* token = ReadToken(input, ch);
-        lisp_object *ret = interpretToken(token);
+        const lisp_object *ret = interpretToken(token);
         return ret;
     }
 }
@@ -168,12 +197,70 @@ static char *ReadToken(FILE *input, char ch) {
     }
 }
 
-static lisp_object *interpretToken(char __attribute__((unused)) *token) {
-	assert(false /* interpretToken is not implemented. */);
-    return NULL;
+static const lisp_object *matchSymbol(__attribute__((unused)) const char *token) {
+	regmatch_t matches[3];
+	int i = regexec(&symbol_regex, token, 3, matches, 0);
+	if(i) {
+		if(i == REG_NOMATCH)
+			return NULL;
+		size_t size = regerror(i, &symbol_regex, NULL, 0);
+		char *errmsg = GC_MALLOC(size * sizeof(*errmsg));
+		regerror(i, &symbol_regex, errmsg, size);
+		fprintf(stderr, "Error: %s\n", errmsg);
+		exit(i);
+	}
+	size_t nslen = matches[1].rm_eo - matches[1].rm_so;
+	char *ns = GC_MALLOC((nslen + 1) * sizeof(*ns));
+	strncpy(ns, token + matches[1].rm_so, nslen);
+	ns[nslen] = '\0';
+	size_t namelen = matches[2].rm_eo - matches[2].rm_so;
+	char *name = GC_MALLOC((namelen + 1) * sizeof(*name));
+	strncpy(name, token + matches[2].rm_so, namelen);
+	name[namelen] = '\0';
+
+	if(nslen > 1 && ns[nslen-2] == ':' && ns[nslen-1] == '/')
+		return NULL;
+	if(namelen > 0 && name[namelen-1] == ':')
+		return NULL;
+	if(strstr(token, "::") == NULL)
+		return NULL;
+
+	if(strlen(token) > 1 && token[0] == ':' && token[1] == ':') {
+		const Symbol *ks = internSymbol1(token + 2);
+		const Namespace *kns = NULL;
+		if(getNamespaceSymbol(ks)) {
+			kns = namespaceFor(CurrentNS(), ks);
+		} else {
+			kns = CurrentNS();
+		}
+		if(kns)
+			return (lisp_object*) internKeyword2(getNameSymbol(getNameNamespace(kns)), getNameSymbol(ks));
+		return NULL;
+	}
+
+	bool isKeyword = token[0] == ':';
+	const Symbol *sym = internSymbol1(token + (isKeyword ? 1 : 0));
+	if(isKeyword)
+		return (lisp_object*) internKeyword(sym);
+	return (lisp_object*)sym;
 }
 
-static lisp_object *CharReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *interpretToken(const char *token) {
+	if(strcmp("nil", token) == 0)
+		return NULL;
+	if(strcmp("true", token) == 0)
+		return (lisp_object*) True;
+	if(strcmp("false", token) == 0)
+		return (lisp_object*) False;
+
+	const lisp_object *ret = matchSymbol(token);
+	if(ret)
+		return ret;
+
+    return NULL;	// TODO throw Util.runtimeException("Invalid token: " + s);
+}
+
+static const lisp_object *CharReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
     char ch = getc(input);
     if(ch == EOF) {
         return (lisp_object*) NewError(false, "EOF while reading character");
@@ -198,7 +285,7 @@ static lisp_object *CharReader(FILE* input, __attribute__((unused)) char c /* *l
     return (lisp_object*) NewError(false, "Unsupported character: \\%s", token);
 }
 
-static lisp_object *StringReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *StringReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
     size_t size = 256;
     size_t i = 0;
     char *str = GC_MALLOC_ATOMIC(size * sizeof(*str));
@@ -256,7 +343,7 @@ static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *co
 	assert(ret);
 
     while(true) {
-        lisp_object *form = read(input, true, delim);
+        const lisp_object *form = read(input, true, delim);
         if(form->type == EOF_type) return NULL;
         if(form == &DONE_lisp_object) {
             *count = i;
@@ -271,7 +358,7 @@ static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *co
     }
 }
 
-static lisp_object *ListReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *ListReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
     size_t count;
     const lisp_object **list = ReadDelimitedList(input, ')', &count);
     if(list == NULL) return (lisp_object*) NewError(true, "");
@@ -279,14 +366,14 @@ static lisp_object *ListReader(FILE* input, __attribute__((unused)) char ch /* *
     return (lisp_object*)CreateList(count, list);
 }
 
-static lisp_object *VectorReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *VectorReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
     size_t count;
     const lisp_object **list = ReadDelimitedList(input, ']', &count);
     if(list == NULL) return (lisp_object*) NewError(true, "");
 	return (lisp_object*) CreateVector(count, list);
 }
 
-static lisp_object *MapReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *MapReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
     size_t count;
     const lisp_object **list = ReadDelimitedList(input, '}', &count);
     if(list == NULL) return (lisp_object*) NewError(true, "");
@@ -294,6 +381,45 @@ static lisp_object *MapReader(FILE* input, __attribute__((unused)) char ch /* *l
     return (lisp_object*)CreateHashMap(count, list);
 }
 
-static lisp_object *UnmatchedParenReader(__attribute__((unused)) FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *UnmatchedParenReader(__attribute__((unused)) FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
 	return (lisp_object*) NewError(false, "Unmatched delimiter: %c", ch);
+}
+
+static const lisp_object *WrappingReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+	const Symbol *sym = ch == '\'' ? quoteSymbol : 
+						ch == '@' ? derefSymbol : NULL;
+	const lisp_object *o = read(input, true, '\0');
+	return (lisp_object*) listStar2((lisp_object*)sym, o, NULL);
+}
+
+static const lisp_object *CommentReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+	for(int ch2 = 0; ch2 != EOF && ch2 != '\n' && ch2 != '\r'; ch2 = getc(input)) {}
+	return &NOOP_lisp_object;
+}
+
+static const lisp_object *MetaReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+	const lisp_object *o = read(input, true, '\0');
+	const IMap *meta = (IMap*) EmptyHashMap;
+	switch(o->type) {
+		case SYMBOL_type:
+		case STRING_type:
+			meta = meta->obj.fns->IMapFns->assoc(meta, (lisp_object*)tagKW, o);
+			break;
+		case KEYWORD_type:
+			meta = meta->obj.fns->IMapFns->assoc(meta, o, (lisp_object*)True);
+			break;
+		case HASHMAP_type:
+			break;
+		default:
+			// TODO	throw new IllegalArgumentException("Metadata must be Symbol,Keyword,String or Map");
+			return NULL;
+	}
+
+	o = read(input, true, '\0');
+	const IMap *ometa = o->meta;
+	for(const ISeq *s = seq((lisp_object*)meta); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
+		const MapEntry *kv = (MapEntry*) s->obj.fns->ISeqFns->first(s);
+		ometa = ometa->obj.fns->IMapFns->assoc(ometa, kv->key, kv->val);
+	}
+	return withMeta(o, ometa);
 }

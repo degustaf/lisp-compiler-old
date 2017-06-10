@@ -43,21 +43,35 @@ interfaces Symbol_interfaces = {
 	NULL,				// IMapFns
 };
 
+const Symbol _arglistsSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "arglists"};
+const Symbol _ConstSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "const"};
 const Symbol _DefSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "def"};
 const Symbol _DocSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "doc"};
 const Symbol _macroSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "macro"};
+const Symbol _privateSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "private"};
+const Symbol _quoteSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "quote"};
 const Symbol _tagSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "tag"};
 
+const Symbol *const quoteSymbol = &_quoteSymbol;
+
+const Symbol _AmpSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "&"};
+const Symbol *const AmpSymbol = &_AmpSymbol;
+const Symbol _derefSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "deref"};
+const Symbol *const derefSymbol = &_derefSymbol;
 const Symbol _DoSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "do"};
 const Symbol *const DoSymbol = &_DoSymbol;
 const Symbol _FNSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "fn*"};
 const Symbol *const FNSymbol = &_FNSymbol;
 const Symbol _inNamespaceSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "inNamespace"};
 const Symbol *const inNamespaceSymbol = &_inNamespaceSymbol;
+const Symbol _in_nsSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "in-ns"};
+const Symbol *const in_nsSymbol = &_inNamespaceSymbol;
 const Symbol _loadFileSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "loadFile"};
 const Symbol *const loadFileSymbol = &_loadFileSymbol;
 const Symbol _namespaceSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "namespace"};
 const Symbol *const namespaceSymbol = &_namespaceSymbol;
+const Symbol _nsSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "ns"};
+const Symbol *const nsSymbol = &_nsSymbol;
 
 const Symbol *internSymbol1(const char *nsname) {
 	size_t len = strlen(nsname);

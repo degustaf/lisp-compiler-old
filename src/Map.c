@@ -167,9 +167,10 @@ Seqable_vtable NodeSeq_Seqable_vtable = {
 };
 
 ICollection_vtable NodeSeq_ICollection_vtable = {
-	countASeq,		// count
-	emptyASeq,		// empty
-	EquivASeq		// Equiv
+	countASeq,					// count
+	(ICollectionFn1)consASeq,	// cons
+	emptyASeq,					// empty
+	EquivASeq					// Equiv
 };
 
 ISeq_vtable NodeSeq_ISeq_vtable = {
@@ -271,9 +272,10 @@ Seqable_vtable HashMap_Seqable_vtable = {
 };
 
 ICollection_vtable HashMap_ICollection_vtable = {
-	countHashMap,	// count
-	emptyHashMap,	// empty
-	EquivHashMap,	// Equiv	
+	countHashMap,					// count
+	(ICollectionFn1)consHashMap,	// cons
+	emptyHashMap,					// empty
+	EquivHashMap,					// Equiv	
 };
 
 IFn_vtable HashMap_IFn_vtable = {

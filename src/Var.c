@@ -84,6 +84,7 @@ static const lisp_object* invoke2Var(const IFn*, const lisp_object*, const lisp_
 static const lisp_object* invoke3Var(const IFn*, const lisp_object*, const lisp_object*, const lisp_object*);
 static const lisp_object* invoke4Var(const IFn*, const lisp_object*, const lisp_object*, const lisp_object*, const lisp_object*);
 static const lisp_object* invoke5Var(const IFn*, const lisp_object*, const lisp_object*, const lisp_object*, const lisp_object*, const lisp_object*);
+static const lisp_object* applyToVar(const IFn*, const ISeq*);
 
 IFn_vtable Var_IFn_vtable = {
 	invoke0Var,	// invoke0
@@ -92,7 +93,7 @@ IFn_vtable Var_IFn_vtable = {
 	invoke3Var,	// invoke3
 	invoke4Var,	// invoke4
 	invoke5Var,	// invoke5
-	NULL,		// applyTo	// TODO
+	applyToVar,	// applyTo
 };
 
 interfaces Var_interfaces = {
@@ -176,13 +177,19 @@ Var* internVar(Namespace *ns, const Symbol *sym, const lisp_object* root, bool r
 	return ret;
 }
 
-const Var* createVar(const lisp_object* root) {
+Var* createVar(const lisp_object* root) {
 	return NewVar(NULL, NULL, root);
 }
 
 const lisp_object *getTag(const Var *v) {
 	const IMap *m = v->obj.meta;
 	return m->obj.fns->IMapFns->entryAt(m, (lisp_object*)tagKW);
+}
+
+const lisp_object *getVar(const Var *v) {
+	if(v->threadBound)
+		return v->root;
+	return deref(v);
 }
 
 void setTag(Var *v, const Symbol *tag) {
@@ -224,6 +231,24 @@ bool isDynamic(const Var *v) {
 	return v->dynamic;
 }
 
+bool isBound(const Var *v) {
+	const IMap *bmap = dval->bindings;
+	return hasRoot(v) || (v->threadBound && bmap->obj.fns->IMapFns->entryAt(bmap, (lisp_object*)v));
+}
+
+bool isPublic(const Var *v) {
+	const IMap *m = v->obj.meta;
+	return m->obj.fns->IMapFns->entryAt(m, (lisp_object*)v);
+}
+
+const lisp_object* deref(const Var *v) {
+	return v->root;
+}
+
+const Namespace *getNamespaceVar(const Var *v) {
+	return v->ns;
+}
+
 void pushThreadBindings(const IMap *bindings) {
 	const Frame *f = dval;
 	const IMap *bmap = dval->bindings;
@@ -256,7 +281,7 @@ static void bindRoot(Var *v, const lisp_object *obj) {
 }
 
 static bool hasRoot(const Var *v) {
-	return v->root->type == UNBOUND_type;
+	return v->root->type != UNBOUND_type;
 }
 
 static const IFn* fn(const Var *v) {
@@ -304,4 +329,11 @@ static const lisp_object* invoke5Var(const IFn *self, const lisp_object *arg1, c
 	const Var *v = (Var*)self;
 	const IFn *f = fn(v);
 	return f->obj.fns->IFnFns->invoke5(f, arg1, arg2, arg3, arg4, arg5);
+}
+
+static const lisp_object* applyToVar(const IFn *self, const ISeq *args) {
+	assert(self->obj.type == VAR_type);
+	const Var *v = (Var*)self;
+	const IFn *f = fn(v);
+	return f->obj.fns->IFnFns->applyTo(f, args);
 }

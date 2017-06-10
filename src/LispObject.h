@@ -29,6 +29,7 @@
 	TYPE(VAR_type) \
 	TYPE(IFN_type) \
 	TYPE(EXPR_type) \
+	TYPE(OBJMETHOD_type) \
 \
 	/* Map types. */ \
 	TYPE(BMI_NODE_type) \
@@ -41,7 +42,8 @@
 \
 	/* Vector types. */\
 	TYPE(VECTOR_type) \
-	TYPE(NODE_type)
+	TYPE(NODE_type) \
+	TYPE(CHUNKEDSEQ_type)
 
 
 typedef enum {

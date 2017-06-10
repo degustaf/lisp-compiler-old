@@ -9,4 +9,8 @@ const Vector *CreateVector(size_t count, lisp_object const **entries);
 
 const Vector *const EmptyVector;
 
+#include "Interfaces.h"
+
+int indexOf(const IVector *iv, const lisp_object *o);
+
 #endif /* VECTOR_H */

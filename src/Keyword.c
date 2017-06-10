@@ -40,10 +40,16 @@ interfaces Keyword_interfaces = {
 	NULL,					// IMapFns
 };
 
+const Keyword _arglistsKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_arglistsSymbol};
+const Keyword *const arglistsKW = &_arglistsKW;
+const Keyword _ConstKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_ConstSymbol};
+const Keyword *const ConstKW = &_ConstKW;
 const Keyword _DocKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_DocSymbol};
 const Keyword *const DocKW = &_DocKW;
 const Keyword _macroKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_macroSymbol};
 const Keyword *const macroKW = &_macroKW;
+const Keyword _privateKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_privateSymbol};
+const Keyword *const privateKW = &_privateKW;
 const Keyword _tagKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_tagSymbol};
 const Keyword *const tagKW = &_tagKW;
 
@@ -90,6 +96,12 @@ const Keyword *findKeyword2(const char *ns, const char *name) {
 	return findKeyword(internSymbol2(ns, name));
 }
 
+void removeKWfromCache(void *obj, void *client_data) {
+	const lisp_object *kw = (lisp_object*)obj;
+	const IMap **cache_address = (const IMap* *)client_data;
+	*cache_address = (*cache_address)->obj.fns->IMapFns->without(*cache_address, kw);
+}
+
 static const Keyword* NewKeyword(const Symbol* s) {
 	Keyword *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = KEYWORD_type;
@@ -99,6 +111,8 @@ static const Keyword* NewKeyword(const Symbol* s) {
 	ret->obj.Equals = EqualsKeyword;
 	ret->obj.fns = &Keyword_interfaces;
 	ret->sym = s;
+
+	GC_REGISTER_FINALIZER(ret, removeKWfromCache, &Cache, NULL, NULL);
 
 	return ret;
 }

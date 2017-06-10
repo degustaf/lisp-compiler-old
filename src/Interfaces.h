@@ -51,8 +51,10 @@ struct Reversible_vtable_struct {
 	const ISeq* (*rseq)(const Seqable*);
 };
 
+typedef const ICollection* (*ICollectionFn1)(const ICollection*, const lisp_object*);
 struct ICollection_vtable_struct {
 	size_t (*count)(const ICollection*);
+	ICollectionFn1 cons;
 	const ICollection* (*empty)(void);
 	bool (*Equiv)(const ICollection*, const lisp_object*);
 };
@@ -102,14 +104,20 @@ struct IMap_vtable_struct {
 // They also use assert to verify Interface Inheritance.
 
 static inline bool isSeqable(const lisp_object *obj) {
+	if(obj == NULL)
+		return false;
 	return (bool)obj->fns->SeqableFns;
 }
 
 static inline bool isReversible(const lisp_object *obj) {
+	if(obj == NULL)
+		return false;
 	return (bool)obj->fns->ReversibleFns;
 }
 
 static inline bool isICollection(const lisp_object *obj) {
+	if(obj == NULL)
+		return false;
 	bool ret = (bool)obj->fns->ICollectionFns;
 	if(ret) {
 		assert(isSeqable(obj));
@@ -118,6 +126,8 @@ static inline bool isICollection(const lisp_object *obj) {
 }
 
 static inline bool isIStack(const lisp_object *obj) {
+	if(obj == NULL)
+		return false;
 	bool ret = (bool)obj->fns->IStackFns;
 	if(ret) {
 		assert(isICollection(obj));
@@ -126,6 +136,8 @@ static inline bool isIStack(const lisp_object *obj) {
 }
 
 static inline bool isISeq(const lisp_object *obj) {
+	if(obj == NULL)
+		return false;
 	bool ret = (bool)obj->fns->ISeqFns;
 	if(ret) {
 		assert(isICollection(obj));
@@ -134,10 +146,14 @@ static inline bool isISeq(const lisp_object *obj) {
 }
 
 static inline bool isIFn(const lisp_object *obj) {
+	if(obj == NULL)
+		return false;
 	return (bool)obj->fns->IFnFns;
 }
 
 static inline bool isIVector(const lisp_object *obj) {
+	if(obj == NULL)
+		return false;
 	bool ret = (bool)obj->fns->IVectorFns;
 	if(ret) {
 		assert(isReversible(obj));
@@ -147,6 +163,8 @@ static inline bool isIVector(const lisp_object *obj) {
 }
 
 static inline bool isIMap(const lisp_object *obj) {
+	if(obj == NULL)
+		return false;
 	bool ret = (bool)obj->fns->IMapFns;
 	if(ret) {
 		assert(isICollection(obj));

@@ -7,6 +7,9 @@
 
 extern Namespace *LISP_ns;
 extern Var *OUT;
+extern Var *Current_ns;
+extern Var *NS_Var;
+extern Var *IN_NS_Var;
 
 const Var* RTVar(const char *ns, const char *name);
 void initRT(void);

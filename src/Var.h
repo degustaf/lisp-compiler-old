@@ -11,9 +11,10 @@ typedef struct Var_struct Var;
 
 Var* NewVar(const Namespace *ns, const Symbol *sym, const lisp_object *root);
 Var* internVar(Namespace *ns, const Symbol *sym, const lisp_object *root, bool replaceRoot);
-const Var* createVar(const lisp_object* root);
+Var* createVar(const lisp_object* root);
 
 const lisp_object *getTag(const Var *v);
+const lisp_object *getVar(const Var *v);
 void setTag(Var *v, const Symbol *obj);
 void setMeta(Var *v, const IMap *m);
 void setMacro(Var *v);
@@ -22,9 +23,12 @@ bool isMacroVar(Var *v);
 Var *setDynamic(Var *v);
 Var *setDynamic1(Var *v, bool b);
 bool isDynamic(const Var *v);
+bool isBound(const Var *v);
+bool isPublic(const Var *v);
+const lisp_object* deref(const Var *v);
 
 
-Namespace *getNamespaceVar(const Var *v);
+const Namespace *getNamespaceVar(const Var *v);
 
 void pushThreadBindings(const IMap *bindings);
 void popThreadBindings(void);

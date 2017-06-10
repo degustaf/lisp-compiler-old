@@ -19,9 +19,10 @@ Seqable_vtable List_Seqable_vtable = {
 };
 
 ICollection_vtable List_ICollection_vtable = {
-	countList, // count
-	emptyASeq, // empty
-	EquivASeq  // Equiv
+	countList,					// count
+	(ICollectionFn1)consASeq,	// cons
+	emptyASeq,					// empty
+	EquivASeq  					// Equiv
 };
 
 ISeq_vtable List_ISeq_vtable = {
