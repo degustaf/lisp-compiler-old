@@ -30,7 +30,7 @@ IFn_vtable bootNS_IFn_vtable = {
 	invokeBootNS,	// invoke3
 	invoke4AFn,		// invoke4
 	invoke5AFn,		// invoke5
-	NULL,			// applyTo
+	applyToAFn,		// applyTo
 };
 interfaces bootNS_interfaces = {
 	NULL,				// SeqableFns
@@ -52,7 +52,7 @@ IFn_vtable InNS_IFn_vtable = {
 	invoke3AFn,	// invoke3
 	invoke4AFn,	// invoke4
 	invoke5AFn,	// invoke5
-	NULL,		// applyTo
+	applyToAFn,	// applyTo
 };
 interfaces InNS_interfaces = {
 	NULL,				// SeqableFns
@@ -74,7 +74,7 @@ IFn_vtable LoadFile_IFn_vtable = {
 	invoke3AFn,		// invoke3
 	invoke4AFn,		// invoke4
 	invoke5AFn,		// invoke5
-	NULL,			// applyTo
+	applyToAFn,		// applyTo
 };
 interfaces LoadFile_interfaces = {
 	NULL,					// SeqableFns

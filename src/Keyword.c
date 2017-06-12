@@ -26,7 +26,7 @@ IFn_vtable Keyword_IFn_vtable = {
 	invoke3AFn,		// invoke3
 	invoke4AFn,		// invoke4
 	invoke5AFn,		// invoke5
-	NULL,			// applyTo
+	applyToAFn,		// applyTo
 };
 
 interfaces Keyword_interfaces = {

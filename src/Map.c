@@ -285,7 +285,7 @@ IFn_vtable HashMap_IFn_vtable = {
 	invoke3AFn,	// invoke3
 	invoke4AFn,	// invoke4
 	invoke5AFn,	// invoke5
-	NULL,		// applyTo	// TODO
+	applyToAFn,	// applyTo
 };
 
 IMap_vtable HashMap_IMap_vtable = {

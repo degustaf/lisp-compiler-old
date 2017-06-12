@@ -213,8 +213,7 @@ void setVar(Var *v, const lisp_object *val) {
 }
 
 bool isMacroVar(Var *v) {
-	const IMap *m = v->obj.meta;
-	return boolCast(m->obj.fns->IMapFns->entryAt(m, (lisp_object*)macroKW));
+	return boolCast(get((lisp_object*)v->obj.meta, (lisp_object*)macroKW, NULL));
 }
 
 Var *setDynamic(Var *v) {
@@ -237,8 +236,7 @@ bool isBound(const Var *v) {
 }
 
 bool isPublic(const Var *v) {
-	const IMap *m = v->obj.meta;
-	return m->obj.fns->IMapFns->entryAt(m, (lisp_object*)v);
+	return boolCast(get((lisp_object*)v->obj.meta, (lisp_object*)privateKW, NULL));
 }
 
 const lisp_object* deref(const Var *v) {

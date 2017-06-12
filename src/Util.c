@@ -24,6 +24,7 @@ bool EqualBase(const lisp_object *x, const lisp_object *y) {
 bool Equals(const lisp_object *x, const lisp_object *y) {
 	if(x == y)
 		return true;
+	assert(x->Equals);
 	return x && x->Equals(x, y);
 }
 
@@ -226,6 +227,8 @@ const lisp_object* assoc(const lisp_object *coll, const lisp_object *key, const 
 }
 
 bool boolCast(const lisp_object *obj) {
+	if(obj == NULL)
+		return (lisp_object*)False;
 	if(obj->type == BOOL_type)
 		return obj == (lisp_object*)True;
 	return obj != NULL;

@@ -29,7 +29,7 @@ IFn_vtable Symbol_IFn_vtable = {
 	invoke3AFn,		// invoke3
 	invoke4AFn,		// invoke4
 	invoke5AFn,		// invoke5
-	NULL,			// applyTo
+	applyToAFn,		// applyTo
 };
 
 interfaces Symbol_interfaces = {
@@ -116,6 +116,7 @@ const Symbol* newSymbol(const char *ns, const char *name) {
 	ret->obj.size = sizeof(Symbol);
 	ret->obj.toString =	toStringSymbol;
 	// ret->obj.copy =		// TODO
+	ret->obj.Equals = EqualSymbol;
 	ret->obj.fns = &Symbol_interfaces;
 	ret->ns = ns;
 	ret->name = name;

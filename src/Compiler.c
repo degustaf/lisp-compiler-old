@@ -867,7 +867,7 @@ static void registerVar(const Var *v) {
 	if(!isBound(v))
 		return;
 	IMap *varsMap = (IMap*) deref(VARS);
-	const lisp_object *id = varsMap->obj.fns->IMapFns->entryAt(varsMap, (lisp_object*)v);
+	const lisp_object *id = get((lisp_object*)varsMap, (lisp_object*)v, NULL);
 	if(id) {
 		setVar(VARS, (lisp_object*)varsMap->obj.fns->IMapFns->assoc(varsMap, (lisp_object*)v, (lisp_object*)NewInteger(registerConstant((lisp_object*)v))));
 	}
@@ -921,13 +921,30 @@ static Var* isMacro(const lisp_object *obj) {
 }
 
 static const lisp_object* macroExpand1(const lisp_object *x) {
+	printf("In MacroExpand1\n");
+	printf("x = %p\n", (void*) x);
+	if(x)
+		printf("x = %s\n", toString(x));
+	fflush(stdout);
 	if(!isISeq(x))
 		return x;
 	const ISeq *form = (ISeq*)x;
+	printf("Initialized form.\n");
+	fflush(stdout);
 	const lisp_object *op = form->obj.fns->ISeqFns->first(form);
-	if(isSpecial(op))
+	printf("Initialized op.\n");
+	fflush(stdout);
+	if(isSpecial(op)) {
+		printf("op is special.\n");
+		fflush(stdout);
 		return x;
+	}
+	printf("op isn't special.\n");
+	fflush(stdout);
 	const Var *v = isMacro(op);
+	printf("Initialized v.\n");
+	printf("v = %p\n", v);
+	fflush(stdout);
 	if(v) {
 		const ISeq *args = form->obj.fns->ISeqFns->next(form);
 		args = cons(getVar(LOCAL_ENV), (lisp_object*)args);
@@ -946,6 +963,8 @@ static const lisp_object* macroExpand1(const lisp_object *x) {
 
 static const lisp_object* macroExpand(const lisp_object *form) {
 	const lisp_object *exp = macroExpand1(form);
+	printf("After macroExpand1\n");
+	fflush(stdout);
 	if(exp != form) 
 		return macroExpand1(exp);
 	return form;
@@ -977,7 +996,7 @@ static const Expr* AnalyzeSeq(Expr_Context context, const ISeq *form, char *name
 
 static const Expr* analyzeSymbol(const Symbol *sym) {
 	const Symbol *tag = tagOf((lisp_object*)sym);
-	if(getNamespaceSymbol(sym)) {
+	if(getNamespaceSymbol(sym) == NULL) {
 		LocalBinding *b = referenceLocal(sym);
 		if(b)
 			return NewLocalBindingExpr(b, tag);
@@ -1007,6 +1026,9 @@ static const Expr* analyzeSymbol(const Symbol *sym) {
 }
 
 static const Expr* Analyze(Expr_Context context, const lisp_object *form, __attribute__((unused)) char *name) {
+	printf("form= %s\n", toString(form));
+	printf("form->type = %s\n", object_type_string[form->type]);
+	fflush(stdout);
 	// TODO if form is LazySeq, convert form to Seq.
 	if(form == NULL) {
 		return NilExpr;
@@ -1057,8 +1079,7 @@ static bool IsLiteralExpr(const Expr *e) {
 }
 
 static const Symbol* tagOf(const lisp_object *o) {
-	const IMap *meta = o->meta;
-	const lisp_object *tag = meta->obj.fns->IMapFns->entryAt(meta, (lisp_object*)tagKW);
+	const lisp_object *tag = get((lisp_object*)o->meta, (lisp_object*)tagKW, NULL);
 
 	if(tag) {
 		switch(tag->type) {
@@ -1109,8 +1130,21 @@ static const lisp_object* resolveIn(Namespace *n, const Symbol *sym, bool allowP
 	const char *dot = strchr(symName, '.');
 	if((dot && symName != dot) || *symName == '[')
 		return NULL;	// TODO return RT.classForName(sym.name);
-	if(Equals((lisp_object*)sym, (lisp_object*)nsSymbol))
+	printf("sym = %p\n", (void*)sym);
+	if(sym)
+		printf("sym = %s\n", toString((lisp_object*)sym));
+	printf("nsSymbol = %p\n", (void*)nsSymbol);
+	if(nsSymbol)
+		printf("nsSymbol = %s\n", toString((lisp_object*)nsSymbol));
+	printf("Equals = %p\n", Equals);
+	fflush(stdout);
+	if(Equals((lisp_object*)sym, (lisp_object*)nsSymbol)) {
+		printf("after Equals");
+		fflush(stdout);
 		return (lisp_object*) NS_Var;
+	}
+	printf("after Equals");
+	fflush(stdout);
 	if(Equals((lisp_object*)sym, (lisp_object*)in_nsSymbol))
 		return (lisp_object*) IN_NS_Var;
 	if(Equals((lisp_object*)sym, getVar(COMPILE_STUB_SYM)))

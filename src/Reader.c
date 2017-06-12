@@ -68,7 +68,7 @@ void init_reader() {
 	// macros['%'] = new ArgReader();
 	// macros['#'] = new DispatchReader();
 
-	const char *const pattern = ":?\\([^[:digit:]/].*/i\\)?\\(/|[^[:digit:]/][^/]*\\)";		// [:]?([\\D&&[^/]].*/)?(/|[\\D&&[^/]][^/]*)
+	const char *const pattern = ":?\\([^[:digit:]/].*/\\)?\\(/|[^[:digit:]/][^/]*\\)";		// [:]?([\\D&&[^/]].*/)?(/|[\\D&&[^/]][^/]*)
 	int i = regcomp(&symbol_regex, pattern, 0);
 	if(i) {
 		fprintf(stderr, "Unable to compile regex pattern: %s\n", pattern);
@@ -118,6 +118,8 @@ const lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolea
         }
 
         char* token = ReadToken(input, ch);
+		printf("token = %s\n", token);
+		fflush(stdout);
         const lisp_object *ret = interpretToken(token);
         return ret;
     }
@@ -197,32 +199,38 @@ static char *ReadToken(FILE *input, char ch) {
     }
 }
 
-static const lisp_object *matchSymbol(__attribute__((unused)) const char *token) {
-	regmatch_t matches[3];
-	int i = regexec(&symbol_regex, token, 3, matches, 0);
-	if(i) {
-		if(i == REG_NOMATCH)
-			return NULL;
-		size_t size = regerror(i, &symbol_regex, NULL, 0);
-		char *errmsg = GC_MALLOC(size * sizeof(*errmsg));
-		regerror(i, &symbol_regex, errmsg, size);
-		fprintf(stderr, "Error: %s\n", errmsg);
-		exit(i);
+static const lisp_object *matchSymbol(const char *token) {
+	bool isKeyword = token[0] == ':';
+	bool nsQualified = false;
+
+	const char *n = token + (isKeyword?1:0);
+	const char *ptr;
+	while( (ptr = strchr(n, '/')) ) {
+		n = ptr + 1;
+		nsQualified = true;
 	}
-	size_t nslen = matches[1].rm_eo - matches[1].rm_so;
-	char *ns = GC_MALLOC((nslen + 1) * sizeof(*ns));
-	strncpy(ns, token + matches[1].rm_so, nslen);
-	ns[nslen] = '\0';
-	size_t namelen = matches[2].rm_eo - matches[2].rm_so;
+	size_t namelen = strlen(n);
 	char *name = GC_MALLOC((namelen + 1) * sizeof(*name));
-	strncpy(name, token + matches[2].rm_so, namelen);
+	strncpy(name, n, namelen);
 	name[namelen] = '\0';
+	printf("n = %p\n", n);
+	printf("token = %p\n", token);
+	size_t nslen = n - token - (isKeyword ? 1 : 0) - (nsQualified?1:0);
+	char *ns = GC_MALLOC((nslen + 1) * sizeof(*ns));
+	strncpy(ns, token + (isKeyword?1:0), nslen);
+	ns[nslen] = '\0';
+
+	printf("namelen = %zd\n", namelen);
+	printf("nslen = %zd\n", nslen);
+	printf("name = %s\n", name);
+	printf("ns = %s\n", ns);
+	fflush(stdout);
 
 	if(nslen > 1 && ns[nslen-2] == ':' && ns[nslen-1] == '/')
 		return NULL;
 	if(namelen > 0 && name[namelen-1] == ':')
 		return NULL;
-	if(strstr(token, "::") == NULL)
+	if(strstr(token, "::"))
 		return NULL;
 
 	if(strlen(token) > 1 && token[0] == ':' && token[1] == ':') {
@@ -238,7 +246,6 @@ static const lisp_object *matchSymbol(__attribute__((unused)) const char *token)
 		return NULL;
 	}
 
-	bool isKeyword = token[0] == ':';
 	const Symbol *sym = internSymbol1(token + (isKeyword ? 1 : 0));
 	if(isKeyword)
 		return (lisp_object*) internKeyword(sym);
@@ -257,128 +264,128 @@ static const lisp_object *interpretToken(const char *token) {
 	if(ret)
 		return ret;
 
-    return NULL;	// TODO throw Util.runtimeException("Invalid token: " + s);
+	return NULL;	// TODO throw Util.runtimeException("Invalid token: " + s);
 }
 
 static const lisp_object *CharReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
-    char ch = getc(input);
-    if(ch == EOF) {
-        return (lisp_object*) NewError(false, "EOF while reading character");
-    }
+	char ch = getc(input);
+	if(ch == EOF) {
+		return (lisp_object*) NewError(false, "EOF while reading character");
+	}
 
-    char *token = ReadToken(input, ch);
-    if(strlen(token) == 1)
-        return (lisp_object*)NewChar(token[0]);
-    if(strcmp(token, "newline") == 0)
-        return (lisp_object*)NewChar('\n');
-    if(strcmp(token, "space") == 0)
-        return (lisp_object*)NewChar(' ');
-    if(strcmp(token, "tab") == 0)
-        return (lisp_object*)NewChar('\t');
-    if(strcmp(token, "backspace") == 0)
-        return (lisp_object*)NewChar('\b');
-    if(strcmp(token, "formfeed") == 0)
-        return (lisp_object*)NewChar('\f');
-    if(strcmp(token, "return") == 0)
-        return (lisp_object*)NewChar('\r');
+	char *token = ReadToken(input, ch);
+	if(strlen(token) == 1)
+		return (lisp_object*)NewChar(token[0]);
+	if(strcmp(token, "newline") == 0)
+		return (lisp_object*)NewChar('\n');
+	if(strcmp(token, "space") == 0)
+		return (lisp_object*)NewChar(' ');
+	if(strcmp(token, "tab") == 0)
+		return (lisp_object*)NewChar('\t');
+	if(strcmp(token, "backspace") == 0)
+		return (lisp_object*)NewChar('\b');
+	if(strcmp(token, "formfeed") == 0)
+		return (lisp_object*)NewChar('\f');
+	if(strcmp(token, "return") == 0)
+		return (lisp_object*)NewChar('\r');
 
-    return (lisp_object*) NewError(false, "Unsupported character: \\%s", token);
+	return (lisp_object*) NewError(false, "Unsupported character: \\%s", token);
 }
 
 static const lisp_object *StringReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
-    size_t size = 256;
-    size_t i = 0;
-    char *str = GC_MALLOC_ATOMIC(size * sizeof(*str));
+	size_t size = 256;
+	size_t i = 0;
+	char *str = GC_MALLOC_ATOMIC(size * sizeof(*str));
 	assert(str);
 
-    for(int ch = getc(input); ch != '"'; ch = getc(input)) {
-        if(ch == EOF) {
-            return (lisp_object*) NewError(false, "EOF while reading string.");
-        }
-        if(ch == '\\') {
-            ch = getc(input);
-            if(ch == EOF) {
-            	return (lisp_object*) NewError(false, "EOF while reading string.");
-            }
+	for(int ch = getc(input); ch != '"'; ch = getc(input)) {
+		if(ch == EOF) {
+			return (lisp_object*) NewError(false, "EOF while reading string.");
+		}
+		if(ch == '\\') {
+			ch = getc(input);
+			if(ch == EOF) {
+				return (lisp_object*) NewError(false, "EOF while reading string.");
+			}
 
-            switch(ch) {
-            case 't':
-                ch = '\t';
-                break;
-            case 'r':
-                ch = '\r';
-                break;
-            case 'n':
-                ch = '\n';
-                break;
-            case 'b':
-                ch = '\b';
-                break;
-            case 'f':
-                ch = '\f';
-                break;
-            case '\\':
-            case '"':
-                break;
-            default:
-                return (lisp_object*) NewError(false, "Unsupported Escape character: \\%c", ch);
-            }
-        }
-        if(i == size) {
-            size *= 2;
-            str = GC_REALLOC(str, size);
+			switch(ch) {
+				case 't':
+					ch = '\t';
+					break;
+				case 'r':
+					ch = '\r';
+					break;
+				case 'n':
+					ch = '\n';
+					break;
+				case 'b':
+					ch = '\b';
+					break;
+				case 'f':
+					ch = '\f';
+					break;
+				case '\\':
+				case '"':
+					break;
+				default:
+					return (lisp_object*) NewError(false, "Unsupported Escape character: \\%c", ch);
+			}
+		}
+		if(i == size) {
+			size *= 2;
+			str = GC_REALLOC(str, size);
 			assert(str);
-        }
-        str[i++] = ch;
-    }
+		}
+		str[i++] = ch;
+	}
 	str[i++] = '\0';
 	lisp_object *obj = (lisp_object*) NewString(str);
 	return obj;
 }
 
 static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
-    size_t size = 8;
-    size_t i = 0;
-    const lisp_object **ret = GC_MALLOC(size * sizeof(*ret));
+	size_t size = 8;
+	size_t i = 0;
+	const lisp_object **ret = GC_MALLOC(size * sizeof(*ret));
 	assert(ret);
 
-    while(true) {
-        const lisp_object *form = read(input, true, delim);
-        if(form->type == EOF_type) return NULL;
-        if(form == &DONE_lisp_object) {
-            *count = i;
-            return ret;
-        }
-        if(size == i) {
-            size *= 2;
-            ret = GC_REALLOC(ret, size * sizeof(*ret));
+	while(true) {
+		const lisp_object *form = read(input, true, delim);
+		if(form->type == EOF_type) return NULL;
+		if(form == &DONE_lisp_object) {
+			*count = i;
+			return ret;
+		}
+		if(size == i) {
+			size *= 2;
+			ret = GC_REALLOC(ret, size * sizeof(*ret));
 			assert(ret);
-        }
-        ret[i++] = form;
-    }
+		}
+		ret[i++] = form;
+	}
 }
 
 static const lisp_object *ListReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
-    size_t count;
-    const lisp_object **list = ReadDelimitedList(input, ')', &count);
-    if(list == NULL) return (lisp_object*) NewError(true, "");
-    if(count == 0) return (lisp_object*)EmptyList;
-    return (lisp_object*)CreateList(count, list);
+	size_t count;
+	const lisp_object **list = ReadDelimitedList(input, ')', &count);
+	if(list == NULL) return (lisp_object*) NewError(true, "");
+	if(count == 0) return (lisp_object*)EmptyList;
+	return (lisp_object*)CreateList(count, list);
 }
 
 static const lisp_object *VectorReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
-    size_t count;
-    const lisp_object **list = ReadDelimitedList(input, ']', &count);
-    if(list == NULL) return (lisp_object*) NewError(true, "");
+	size_t count;
+	const lisp_object **list = ReadDelimitedList(input, ']', &count);
+	if(list == NULL) return (lisp_object*) NewError(true, "");
 	return (lisp_object*) CreateVector(count, list);
 }
 
 static const lisp_object *MapReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
-    size_t count;
-    const lisp_object **list = ReadDelimitedList(input, '}', &count);
-    if(list == NULL) return (lisp_object*) NewError(true, "");
+	size_t count;
+	const lisp_object **list = ReadDelimitedList(input, '}', &count);
+	if(list == NULL) return (lisp_object*) NewError(true, "");
 	if(count & 1) return (lisp_object*) NewError(false, "Map literal must contain an even number of forms");
-    return (lisp_object*)CreateHashMap(count, list);
+	return (lisp_object*)CreateHashMap(count, list);
 }
 
 static const lisp_object *UnmatchedParenReader(__attribute__((unused)) FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
@@ -387,7 +394,7 @@ static const lisp_object *UnmatchedParenReader(__attribute__((unused)) FILE* inp
 
 static const lisp_object *WrappingReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
 	const Symbol *sym = ch == '\'' ? quoteSymbol : 
-						ch == '@' ? derefSymbol : NULL;
+		ch == '@' ? derefSymbol : NULL;
 	const lisp_object *o = read(input, true, '\0');
 	return (lisp_object*) listStar2((lisp_object*)sym, o, NULL);
 }

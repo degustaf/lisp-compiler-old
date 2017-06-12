@@ -42,6 +42,14 @@ Namespace *lookupAlias(Namespace *ns, const Symbol *alias) {
 }
 
 Namespace* namespaceFor(Namespace *inns, const Symbol *sym) {
+	printf("inns = %p\n", (void*)inns);
+	if(inns)
+		printf("inns = %s\n", toString((lisp_object*)inns));
+	printf("sym = %p\n", (void*)sym);
+	if(sym)
+		printf("sym = %s\n", toString((lisp_object*)sym));
+	fflush(stdout);
+
 	const Symbol *nsSym = internSymbol1(getNamespaceSymbol(sym));
 	Namespace *ns = lookupAlias(inns, nsSym);
 	if(ns)
