@@ -1,5 +1,6 @@
 #include "Namespace.h"
 
+#include "Error.h"
 #include "gc.h"
 #include "Interfaces.h"
 #include "Map.h"
@@ -63,7 +64,8 @@ const Symbol* getNameNamespace(const Namespace *ns) {
 
 Var *internNS(Namespace *ns, const Symbol *s) {
 	if(getNamespaceSymbol(s)) {
-		NULL;	// throw new IllegalArgumentException("Can't intern namespace-qualified symbol");
+		exception e = {IllegalArgumentException, "Can't intern namespace-qualified symbol"};
+		Raise(e);
 	}
 	const IMap *map = ns->mappings;
 	const lisp_object *o = NULL;

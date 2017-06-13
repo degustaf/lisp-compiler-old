@@ -267,7 +267,12 @@ static const lisp_object *interpretToken(const char *token) {
 	if(ret)
 		return ret;
 
-	return NULL;	// TODO throw Util.runtimeException("Invalid token: " + s);
+	StringWriter *sw = NewStringWriter();
+	AddString(sw, "Invalid token: ");
+	AddString(sw, token);
+	exception e = {RuntimeException, WriteString(sw)};
+	Raise(e);
+	return NULL;	// This won't be reached, but prevents gcc Warning.
 }
 
 static const lisp_object *CharReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
@@ -420,9 +425,10 @@ static const lisp_object *MetaReader(FILE* input, __attribute__((unused)) char c
 			break;
 		case HASHMAP_type:
 			break;
-		default:
-			// TODO	throw new IllegalArgumentException("Metadata must be Symbol,Keyword,String or Map");
-			return NULL;
+		default: {
+			exception e = {IllegalArgumentException, "Metadata must be Symbol,Keyword,String or Map"};
+			Raise(e);
+		}
 	}
 
 	o = read(input, true, '\0');

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Bool.h"
+#include "Error.h"
 #include "gc.h"
 #include "Interfaces.h"
 #include "Keyword.h"
@@ -223,7 +224,8 @@ typedef struct {	// LocalBinding
 __attribute__((unused)) static LocalBinding* NewLocalBinding(int num, const Symbol *sym, const Symbol *tag, const Expr *init, bool isArg, const PathNode *clearPathRoot) {
 	LocalBinding *ret = GC_MALLOC(sizeof(*ret));
 	if(maybePrimitiveType(init) && tag) {
-		// 	throw new UnsupportedOperationException("Can't type hint a local with a primitive initializer");
+		exception e = {UnsupportedOperationException, "Can't type hint a local with a primitive initializer"};
+		Raise(e);
 	}
 	ret->index = num;
 	ret->sym = sym;
@@ -346,7 +348,8 @@ static const Expr* NewConstantExpr(const lisp_object *v) {
 static const Expr* parseConstant(__attribute__((unused)) Expr_Context context, const lisp_object *form) {
 	size_t argcount = count(form) - 1;
 	if(argcount != 1) {
-		// TODO throw exception
+		exception e = {RuntimeException, WriteString(AddString(AddInt(AddString(NewStringWriter(), "Wrong number of args ("), argcount), ") passed to quote"))};
+		Raise(e);
 	}
 
 	const ISeq *s = seq(form);
@@ -514,7 +517,8 @@ static const Expr* parseMapExpr(Expr_Context context, const IMap *form) {
 	}
 	if(keysConstant) {
 		if(!allConstantKeysUnique) {
-			// TODO throw Exception.
+			exception e = {IllegalArgumentException, "Duplicate constant keys in map."};
+			Raise(e);
 		}
 		if(valsConstant) {
 			const IMap *m = (IMap*)EmptyHashMap;
@@ -610,15 +614,20 @@ typedef struct {	// InvokeExpr
 static const lisp_object* EvalInvoke(const Expr *self) {
 	assert(self->type == INVOKEEXPR_type);
 	const InvokeExpr *Invk = (InvokeExpr*)self;
-	// TRY
-	IFn *f = (IFn*) Invk->fexpr->Eval(Invk->fexpr);
-	const IVector *args = (IVector*)EmptyVector;
-	for(size_t i = 0; i < Invk->args->obj.fns->ICollectionFns->count((ICollection*)Invk->args); i++) {
-		Expr *ith = (Expr*)Invk->args->obj.fns->IVectorFns->nth(Invk->args, i, NULL);
-		args = args->obj.fns->IVectorFns->cons(args, ith->Eval(ith));
-	}
-	return f->obj.fns->IFnFns->applyTo(f, args->obj.fns->SeqableFns->seq((Seqable*)args));
-	// CATCH
+	TRY
+		IFn *f = (IFn*) Invk->fexpr->Eval(Invk->fexpr);
+		const IVector *args = (IVector*)EmptyVector;
+		for(size_t i = 0; i < Invk->args->obj.fns->ICollectionFns->count((ICollection*)Invk->args); i++) {
+			Expr *ith = (Expr*)Invk->args->obj.fns->IVectorFns->nth(Invk->args, i, NULL);
+			args = args->obj.fns->IVectorFns->cons(args, ith->Eval(ith));
+		}
+		return f->obj.fns->IFnFns->applyTo(f, args->obj.fns->SeqableFns->seq((Seqable*)args));
+	EXCEPT(CompilerExcp)
+		ReRaise;
+	EXCEPT(ANY)
+		exception e = {CompilerException, _ctx.id->msg};
+		Raise(e);
+	ENDTRY
 }
 
 static const lisp_object* sigTag(size_t argCount, const Var *v) {
@@ -721,13 +730,15 @@ typedef struct {	// LocalBindingExpr
 } LocalBindingExpr;
 
 static const lisp_object* EvalLocalBinding(__attribute__((unused)) const Expr *self) {
-	// throw new UnsupportedOperationException("Can't eval locals");
-	return NULL;
+	exception e = {UnsupportedOperationException, "Can't eval locals"};
+	Raise(e);
+	__builtin_unreachable();
 }
 
 static Expr* NewLocalBindingExpr(LocalBinding *b, const Symbol *tag) {
 	if(getPrimitiveType(b) && tag) {
-		// throw new UnsupportedOperationException("Can't type hint a primitive local");
+		exception e = {UnsupportedOperationException, "Can't type hint a primitive local"};
+		Raise(e);
 	}
 	LocalBindingExpr *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = EXPR_type;
@@ -834,16 +845,21 @@ typedef struct {	// DefExpr
 static const lisp_object* EvalDef(const Expr *self) {
 	assert(self->type == DEFEXPR_type);
 	const DefExpr *defx = (DefExpr*)self;
-	// TRY
-	if(defx->initProvided) {
-		bindRoot(defx->v, defx->init->Eval(defx->init));
-		if(defx->meta) {
-			const IMap *meta = (IMap*) defx->meta->Eval(defx->meta);
-			setMeta(defx->v, meta);
+	TRY
+		if(defx->initProvided) {
+			bindRoot(defx->v, defx->init->Eval(defx->init));
+			if(defx->meta) {
+				const IMap *meta = (IMap*) defx->meta->Eval(defx->meta);
+				setMeta(defx->v, meta);
+			}
 		}
-	}
-	return (lisp_object*) setDynamic1(defx->v, defx->isDynamic);
-	// CATCH
+		return (lisp_object*) setDynamic1(defx->v, defx->isDynamic);
+	EXCEPT(CompilerExcp)
+		ReRaise;
+	EXCEPT(ANY)
+		exception e = {CompilerException, _ctx.id->msg};
+		Raise(e);
+	ENDTRY
 }
 
 static Expr* NewDefExpr(const char *source, int line, int column, Var *v, const Expr *init, const Expr *meta, bool initProvided, bool isDynamic, bool shadowsCoreMapping) {
@@ -874,22 +890,27 @@ static const Expr* parseDefExpr(Expr_Context context, const lisp_object *form) {
 	}
 
 	if(count(form) > 3) {
-		// throw Util.runtimeException("Too many arguments to def");
+		exception e = {RuntimeException, "Too many arguments to def"};
+		Raise(e);
 	} else if(count(form) < 2) {
-		// throw Util.runtimeException("Too few arguments to def");
+		exception e = {RuntimeException, "Too few arguments to def"};
+		Raise(e);
 	} else if(second(form)->type != SYMBOL_type) {
-		// throw Util.runtimeException("First argument to def must be a Symbol");
+		exception e = {RuntimeException, "First argument to def must be a Symbol"};
+		Raise(e);
 	}
 
 	const Symbol *sym = (Symbol*) second(form);
 	Var *v = LookupVar(sym, true, true);
 	if(v == NULL) {
-		// throw Util.runtimeException("Can't refer to qualified var that doesn't exist");
+		exception e = {RuntimeException, "Can't refer to qualified var that doesn't exist"};
+		Raise(e);
 	}
 	bool shadowsCoreMapping = false;
 	if(!Equals((lisp_object*)getNamespaceVar(v), (lisp_object*)CurrentNS())) {
 		if(getNameSymbol(sym)) {
-			// throw Util.runtimeException("Can't create defs outside of current ns");
+		exception e = {RuntimeException, "Can't create defs outside of current ns"};
+		Raise(e);
 		}
 		v = internNS(CurrentNS(), sym);
 		shadowsCoreMapping = true;
@@ -986,7 +1007,8 @@ static const Expr* registerKeyword(const Keyword *kw) {
 
 static int registerKeywordCallsite(const Keyword *k) {
 	if(!isBound(KEYWORD_CALLSITES)) {
-		// Throw New IllegalAccessError("KEYWORD_CALLSITES is not bound");
+		exception e = {IllegalAccessError, "KEYWORD_CALLSITES is not bound"};
+		Raise(e);
 	}
 	const IVector *keywordCallSites = (IVector*)deref(KEYWORD_CALLSITES);
 	keywordCallSites = keywordCallSites->obj.fns->IVectorFns->cons(keywordCallSites, (lisp_object*)k);
@@ -1049,7 +1071,8 @@ static Var* isMacro(const lisp_object *obj) {
 	}
 	if(ret && isMacroVar(ret)) {
 		if(getNamespaceVar(ret) != CurrentNS() && !isPublic(ret)) {
-			// throw new IllegalStateException("var: " + v + " is not public");
+			exception e = {IllegalStateException, WriteString(AddString(AddString(AddString(NewStringWriter(), "var: "), toString((lisp_object*)ret)), " is not public"))};
+			Raise(e);
 		}
 		return ret;
 	}
@@ -1095,7 +1118,8 @@ static const Expr* AnalyzeSeq(Expr_Context context, const ISeq *form, const char
 
 	const lisp_object *op = form->obj.fns->ISeqFns->first(form);
 	if(op == NULL) {
-		// Throw new IllegalArgumentException("Can't call nil, form: " + form);
+		exception e = {IllegalArgumentException, WriteString(AddString(AddString(NewStringWriter(), "Can't call nil, form: "), toString((lisp_object*)form)))};
+		Raise(e);
 		return NULL;
 	}
 	// const ISeq *next = form->obj.fns->ISeqFns->next(form);
@@ -1127,8 +1151,10 @@ static const Expr* analyzeSymbol(const Symbol *sym) {
 	switch(o->type) {
 		case VAR_type: {
 			const Var *v = (Var*)o;
-			if(isMacro((lisp_object*)v))
-				return NULL;	// TODO throw Util.runtimeException("Can't take value of a macro: " + v);
+			if(isMacro((lisp_object*)v)) {
+				exception e = {RuntimeException, WriteString(AddString(AddString(NewStringWriter(), "Can't take value of a macro: "), toString(o)))};
+				Raise(e);
+			}
 			if(boolCast(get((lisp_object*)((lisp_object*)v)->meta, (lisp_object*)ConstKW, NULL)))
 				return Analyze(EXPRESSION, (lisp_object*)listStar2((lisp_object*)quoteSymbol, getVar(v), NULL), NULL);
 			registerVar(v);
@@ -1138,9 +1164,13 @@ static const Expr* analyzeSymbol(const Symbol *sym) {
 		// 	return NewConstantExpr(o);
 		case SYMBOL_type:
 			// return NewUnresolvedVarExpr((Symbol*)o);	// TODO
-		default:
-			return NULL;	// TODO throw Util.runtimeException("Unable to resolve symbol: " + sym + " in this context");
+		default: {
+			exception e = {RuntimeException, WriteString(AddString(AddString(AddString(NewStringWriter(), "Unable to resolve symbol: "),
+							toString((lisp_object*)sym)), " in this context"))};
+			Raise(e);
+		}
 	}
+	__builtin_unreachable();
 }
 
 static const Expr* Analyze(Expr_Context context, const lisp_object *form, const char *name) {
@@ -1231,13 +1261,19 @@ static const object_type* maybePrimitiveType(__attribute__((unused)) const Expr 
 static const lisp_object* resolveIn(Namespace *n, const Symbol *sym, bool allowPrivate) {
 	if(getNamespaceSymbol(sym)) {
 		const Namespace *ns = namespaceFor(n, sym);
-		if(ns == NULL)
-			return NULL;	// TODO throw Util.runtimeException("No such namespace: " + sym.ns);
+		if(ns == NULL) {
+			exception e = {RuntimeException, WriteString(AddString(AddString(NewStringWriter(), "No such namespace: "), toString((lisp_object*)getNamespaceSymbol(sym))))};
+			Raise(e);
+		}
 		const Var *v = findInternedVar(ns, internSymbol1(getNameSymbol(sym)));
-		if(v == NULL)
-			return NULL;	// TODO throw Util.runtimeException("No such var: " + sym);
-		if(getNamespaceVar(v) != CurrentNS() && !isPublic(v) && !allowPrivate)
-			return NULL;	// TODO throw new IllegalStateException("var: " + sym + " is not public");
+		if(v == NULL) {
+			exception e = {RuntimeException, WriteString(AddString(AddString(NewStringWriter(), "No such var: "), toString((lisp_object*)sym)))};
+			Raise(e);
+		}
+		if(getNamespaceVar(v) != CurrentNS() && !isPublic(v) && !allowPrivate) {
+			exception e = {RuntimeException, WriteString(AddString(AddString(AddString(NewStringWriter(), "var: "), toString((lisp_object*)sym)), " is not public"))};
+			Raise(e);
+		}
 		return (lisp_object*) v;
 	}
 
@@ -1257,7 +1293,9 @@ static const lisp_object* resolveIn(Namespace *n, const Symbol *sym, bool allowP
 		return o;
 	if(boolCast(deref(ALLOW_UNRESOLVED_VARS)))
 		return (lisp_object*)sym;
-	return NULL; // TODO throw Util.runtimeException("Unable to resolve symbol: " + sym + " in this context");
+	exception e = {RuntimeException, WriteString(AddString(AddString(AddString(NewStringWriter(), "Unable to resolve symbol: "), toString((lisp_object*)sym)), " in this context"))};
+	Raise(e);
+	__builtin_unreachable();
 }
 
 
@@ -1308,14 +1346,26 @@ const lisp_object* compilerLoad(FILE *reader, __attribute__((unused)) const char
 	// const lisp_object *mapArgs[] = {(const lisp_object*)NewString(path), (const lisp_object*)NewString(name)};
 	// size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
 	// TODO pushThreadBindings
-	// try
-	for(const lisp_object *r = read(reader, false, '\0'); r->type != EOF_type; r = read(reader, false, '\0')) {
-		if(r->type == ERROR_type) {
-			break;
+	TRY
+		for(const lisp_object *r = read(reader, false, '\0'); r->type != EOF_type; r = read(reader, false, '\0')) {
+			if(r->type == ERROR_type) {
+				break;
+			}
+			// set(LINE_AFTER, ...);	// TODO
+			// set(COLUMN_AFTER, ...);	// TODO
+			ret = Eval(r);
+			// set(LINE_BEFORE, ...);	// TODO
+			// set(COLUMN_BEFORE, ...);	// TODO
 		}
-		// TODO
-		ret = Eval(r);
-	}
+	EXCEPT(ReaderExcp)
+		exception e = {CompilerException, _ctx.id->msg};
+		Raise(e);
+	EXCEPT(CompilerExcp)
+		ReRaise;
+	EXCEPT(ANY)
+		exception e = {CompilerException, _ctx.id->msg};
+		Raise(e);
 	// TODO
+	ENDTRY
 	return ret;
 }

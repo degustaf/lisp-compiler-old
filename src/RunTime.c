@@ -4,12 +4,14 @@
 
 #include "AFn.h"
 #include "Compiler.h"
+#include "Error.h"
 #include "gc.h"
 #include "Keyword.h"
 #include "List.h"
 #include "Map.h"
 #include "Reader.h"
 #include "Strings.h"
+#include "StringWriter.h"
 #include "Symbol.h"
 #include "Vector.h"
 
@@ -159,7 +161,12 @@ static void load(const char *scriptbase, bool failIfNotFound) {
 		fflush(stdout);
 		loadResourceScript(lispFile, true);
 	} else if(!loaded && failIfNotFound) {
-		// TODO Throw Error.
+		StringWriter *sw = NewStringWriter();
+		AddString(sw, "Could not locate ");
+		AddString(sw, scriptbase);
+		AddString(sw, " on classpath.");
+		exception e = {FileNotFoundException, WriteString(sw)};
+		Raise(e);
 	}
 }
 
@@ -169,13 +176,18 @@ static void loadResourceScript(char *name, bool failIfNotFound) {
 	for(char *ptr = strchr(file, '/'); ptr != NULL; ptr = strchr(file, '/'))
 		file = ptr + 1;
 	if(in) {
-		// try
-		printf("About to enter compilerLoad.\n");
-		fflush(stdout);
-		compilerLoad(in, name, file);
-		// finally
-		fclose(in);
+		TRY
+			printf("About to enter compilerLoad.\n");
+			fflush(stdout);
+			compilerLoad(in, name, file);
+		FINALLY
+			fclose(in);
+		ENDTRY
 	} else if(failIfNotFound) {
-		// TODO throw Error
+		StringWriter *sw = NewStringWriter();
+		AddString(sw, "Could not locate Clojure resource on classpath: ");
+		AddString(sw, name);
+		exception e = {FileNotFoundException, WriteString(sw)};
+		Raise(e);
 	}
 }

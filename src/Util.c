@@ -223,7 +223,8 @@ const lisp_object* assoc(const lisp_object *coll, const lisp_object *key, const 
 			return (lisp_object*)coll->fns->IMapFns->assoc((IMap*)coll, key, val);
 		if(isIVector(coll))
 			return (lisp_object*)coll->fns->IVectorFns->assoc((IVector*)coll, key, val);
-		// Throw "Cannot use assoc on coll"
+		exception e = {UnsupportedOperationException, "Cannot use assoc on coll"};
+		Raise(e);
 	}
 	return (lisp_object*)((IMap*)EmptyHashMap)->obj.fns->IMapFns->assoc((IMap*)EmptyHashMap, key, val);
 }
@@ -248,7 +249,8 @@ size_t count(const lisp_object *obj) {
 		return 0;
 	if(isICollection(obj))
 		return obj->fns->ICollectionFns->count((ICollection*)obj);
-	// TODO // throw "Count not supported on this type."
+	exception e = {UnsupportedOperationException, "Count not supported on this type."};
+	Raise(e);
 	return 0;
 }
 

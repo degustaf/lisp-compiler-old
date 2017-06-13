@@ -1,6 +1,7 @@
 #include "StringWriter.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "gc.h"
@@ -32,18 +33,39 @@ static void AddStringLen(StringWriter *sw, const char *const str, size_t len) {
 	sw->buffer[sw->len] = '\0';
 }
 
-void AddString(StringWriter *sw, const char *const str) {
+StringWriter *AddString(StringWriter *sw, const char *const str) {
 	size_t len = strlen(str);
 	AddStringLen(sw, str, len);
+	return sw;
 }
 
-void AddChar(StringWriter *sw, char c) {
+StringWriter *AddChar(StringWriter *sw, char c) {
 	AddStringLen(sw, &c, 1);
+	return sw;
 }
 
-void Shrink(StringWriter *sw, size_t n) {
+StringWriter *AddInt(StringWriter *sw, int i) {
+	size_t len = snprintf(NULL, 0, "%d", i);
+	char *s = GC_MALLOC_ATOMIC((len+1)*sizeof(*s));
+	snprintf(s, len, "%d", i);
+	s[len] = '\0';
+	AddStringLen(sw, s, len);
+	return sw;
+}
+
+StringWriter *AddFloat(StringWriter *sw, double x) {
+	size_t len = snprintf(NULL, 0, "%f", x);
+	char *s = GC_MALLOC_ATOMIC((len+1)*sizeof(*s));
+	snprintf(s, len, "%f", x);
+	s[len] = '\0';
+	AddStringLen(sw, s, len);
+	return sw;
+}
+
+StringWriter *Shrink(StringWriter *sw, size_t n) {
 	sw->len = sw->len < n ? 0: sw->len - n;
 	sw->buffer[sw->len] = '\0';
+	return sw;
 }
 
 char *WriteString(StringWriter *sw) {

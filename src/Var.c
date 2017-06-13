@@ -2,6 +2,7 @@
 
 #include "ARef.h"
 #include "Bool.h"
+#include "Error.h"
 #include "gc.h"
 #include "Interfaces.h"
 #include "Keyword.h"
@@ -277,7 +278,8 @@ void pushThreadBindings(const IMap *bindings) {
 void popThreadBindings(void) {
 	const Frame *f = dval->prev;
 	if(f == NULL) {
-		NULL;	// TODO throw new IllegalStateException("Pop without matching push");
+		exception e = {IllegalStateException, "Pop without matching push"};
+		Raise(e);
 	}
 	dval = f;
 }

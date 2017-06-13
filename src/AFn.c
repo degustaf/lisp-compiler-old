@@ -4,27 +4,33 @@
 #include "Util.h"
 
 const lisp_object* invoke0AFn(const IFn *self) {
-	return (const lisp_object*) NewArityError(0, object_type_string[self->obj.type]);
+	NewArityError(0, object_type_string[self->obj.type]);
+	return NULL;
 }
 
 const lisp_object* invoke1AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1) {
-	return (const lisp_object*) NewArityError(0, object_type_string[self->obj.type]);
+	NewArityError(0, object_type_string[self->obj.type]);
+	return NULL;
 }
 
 const lisp_object* invoke2AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1, __attribute__((unused)) const lisp_object *arg2) {
-	return (const lisp_object*) NewArityError(0, object_type_string[self->obj.type]);
+	NewArityError(0, object_type_string[self->obj.type]);
+	return NULL;
 }
 
 const lisp_object* invoke3AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1, __attribute__((unused)) const lisp_object *arg2, __attribute__((unused)) const lisp_object *arg3) {
-	return (const lisp_object*) NewArityError(0, object_type_string[self->obj.type]);
+	NewArityError(0, object_type_string[self->obj.type]);
+	return NULL;
 }
 
 const lisp_object* invoke4AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1, __attribute__((unused)) const lisp_object *arg2, __attribute__((unused)) const lisp_object *arg3, __attribute__((unused)) const lisp_object *arg4) {
-	return (const lisp_object*) NewArityError(0, object_type_string[self->obj.type]);
+	NewArityError(0, object_type_string[self->obj.type]);
+	return NULL;
 }
 
 const lisp_object* invoke5AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1, __attribute__((unused)) const lisp_object *arg2, __attribute__((unused)) const lisp_object *arg3, __attribute__((unused)) const lisp_object *arg4, __attribute__((unused)) const lisp_object *arg5) {
-	return (const lisp_object*) NewArityError(0, object_type_string[self->obj.type]);
+	NewArityError(0, object_type_string[self->obj.type]);
+	return NULL;
 }
 
 const lisp_object* applyToAFn(const IFn *self, const ISeq *args) {
@@ -52,7 +58,10 @@ const lisp_object* applyToAFn(const IFn *self, const ISeq *args) {
 			return self->obj.fns->IFnFns->invoke4(self, arg1, arg2, arg3, arg4);
 		case 5:
 			return self->obj.fns->IFnFns->invoke5(self, arg1, arg2, arg3, arg4, arg5);
-		default:
-			return NULL;	// THROW applyTo needs to be extended.
+		default: {
+			exception e = {Exception, "applyTo needs to be extended."};
+			Raise(e);
+		}
 	}
+	return NULL;
 }
