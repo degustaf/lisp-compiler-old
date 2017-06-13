@@ -50,6 +50,9 @@ static const lisp_object *CommentReader(FILE* input, char ch /* *lisp_object opt
 static const lisp_object *MetaReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
 
 void init_reader() {
+	printf("In init_reader\n");
+	fflush(stdout);
+
     macros['\\'] = CharReader;
     macros['"']  = StringReader;
     macros['(']  = ListReader;

@@ -21,6 +21,8 @@ const lisp_object *get(const lisp_object *coll, const lisp_object *key, const li
 const ISeq *seq(const lisp_object *obj);
 const lisp_object *first(const lisp_object *x);
 const lisp_object *second(const lisp_object *x);
+const lisp_object *third(const lisp_object *x);
+const lisp_object *fourth(const lisp_object *x);
 const ISeq *next(const lisp_object *x);
 const ISeq* cons(const lisp_object *x, const lisp_object *coll);
 const ICollection* conj_(const ICollection *coll, const lisp_object *x);

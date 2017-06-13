@@ -9,7 +9,6 @@
 static void HandleTopLevelExpression(const lisp_object *const current);
 
 void repl(FILE *input) {
-    init_reader();
     for(;;) {
         printf("Lisp>");
         const lisp_object *current = read(input, false, '\0');

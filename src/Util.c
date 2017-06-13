@@ -90,12 +90,6 @@ static void PrintObject(StringWriter *sw, const lisp_object *obj) {
 		AddString(sw, "()");
 		return;
 	}
-	printf("obj = %p\n", (void*)obj);
-	fflush(stdout);
-	printf("obj->type = %d\n", obj->type);
-	fflush(stdout);
-	printf("obj->type = %s\n", object_type_string[obj->type]);
-	fflush(stdout);
 	if(isISeq(obj)) {
 		assert(obj->fns->ISeqFns->next != NULL);
 		assert(obj->fns->ISeqFns->first != NULL);
@@ -188,6 +182,14 @@ const lisp_object *first(const lisp_object *x) {
 
 const lisp_object *second(const lisp_object *x) {
 	return first((lisp_object*)next(x));
+}
+
+const lisp_object *third(const lisp_object *x) {
+	return first((lisp_object*)next((lisp_object*)next(x)));
+}
+
+const lisp_object *fourth(const lisp_object *x) {
+	return first((lisp_object*)next((lisp_object*)next((lisp_object*)next(x))));
 }
 
 const ISeq *next(const lisp_object *x) {

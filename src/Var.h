@@ -26,9 +26,11 @@ bool isDynamic(const Var *v);
 bool isBound(const Var *v);
 bool isPublic(const Var *v);
 const lisp_object* deref(const Var *v);
+void bindRoot(Var *v, const lisp_object *obj);
 
 
 const Namespace *getNamespaceVar(const Var *v);
+const Symbol *getSymbolVar(const Var *v);
 
 void pushThreadBindings(const IMap *bindings);
 void popThreadBindings(void);

@@ -8,6 +8,7 @@
 #include "Keyword.h"
 #include "List.h"
 #include "Map.h"
+#include "Reader.h"
 #include "Strings.h"
 #include "Symbol.h"
 #include "Vector.h"
@@ -124,6 +125,7 @@ void initRT(void) {
 
 	printf("About to load.\n");
 	fflush(stdout);
+    init_reader();
 	load("lisp/core", true);
 }
 

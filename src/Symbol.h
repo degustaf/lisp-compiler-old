@@ -15,6 +15,8 @@ extern const Symbol _arglistsSymbol;
 extern const Symbol _ConstSymbol;
 extern const Symbol _DefSymbol;
 extern const Symbol _DocSymbol;
+extern const Symbol _DynamicSymbol;
+extern const Symbol _FileSymbol;
 extern const Symbol _macroSymbol;
 extern const Symbol _privateSymbol;
 extern const Symbol _quoteSymbol;

@@ -75,7 +75,6 @@ struct Var_struct{
 
 // Var function declarations.
 
-static void bindRoot(Var *v, const lisp_object *obj);
 static bool hasRoot(const Var *v);
 static const IFn* fn(const Var *v);
 static const lisp_object* invoke0Var(const IFn*);
@@ -85,6 +84,7 @@ static const lisp_object* invoke3Var(const IFn*, const lisp_object*, const lisp_
 static const lisp_object* invoke4Var(const IFn*, const lisp_object*, const lisp_object*, const lisp_object*, const lisp_object*);
 static const lisp_object* invoke5Var(const IFn*, const lisp_object*, const lisp_object*, const lisp_object*, const lisp_object*, const lisp_object*);
 static const lisp_object* applyToVar(const IFn*, const ISeq*);
+static const char* toStringVar(const lisp_object *obj);
 
 IFn_vtable Var_IFn_vtable = {
 	invoke0Var,	// invoke0
@@ -150,7 +150,7 @@ Var* NewVar(const Namespace *ns, const Symbol *sym, const lisp_object *root) {
 	Var *ret = GC_MALLOC(sizeof(*ret));
 
 	ret->obj.type = VAR_type;
-	ret->obj.toString = NULL;	// TODO
+	ret->obj.toString = toStringVar;
 	ret->obj.copy = NULL;		// TODO
 	ret->obj.meta = (IMap*) EmptyHashMap;
 	ret->obj.fns = &Var_interfaces;
@@ -243,8 +243,19 @@ const lisp_object* deref(const Var *v) {
 	return v->root;
 }
 
+void bindRoot(Var *v, const lisp_object *obj) {
+	Validate(v->validator, obj);
+	v->root = obj;
+	// TODO Handle meta.
+	// TODO Handle Watches.
+}
+
 const Namespace *getNamespaceVar(const Var *v) {
 	return v->ns;
+}
+
+const Symbol *getSymbolVar(const Var *v) {
+	return v->sym;
 }
 
 void pushThreadBindings(const IMap *bindings) {
@@ -269,13 +280,6 @@ void popThreadBindings(void) {
 		NULL;	// TODO throw new IllegalStateException("Pop without matching push");
 	}
 	dval = f;
-}
-
-static void bindRoot(Var *v, const lisp_object *obj) {
-	Validate(v->validator, obj);
-	v->root = obj;
-	// TODO Handle meta.
-	// TODO Handle Watches.
 }
 
 static bool hasRoot(const Var *v) {
@@ -333,5 +337,25 @@ static const lisp_object* applyToVar(const IFn *self, const ISeq *args) {
 	assert(self->obj.type == VAR_type);
 	const Var *v = (Var*)self;
 	const IFn *f = fn(v);
-	return f->obj.fns->IFnFns->applyTo(f, args);
+	const lisp_object *ret = f->obj.fns->IFnFns->applyTo(f, args);
+	return ret;
+}
+
+static const char* toStringVar(const lisp_object *obj) {
+	assert(obj->type == VAR_type);
+	const Var *v = (Var*)obj;
+	StringWriter *sw = NewStringWriter();
+
+	if(v->ns) {
+		AddString(sw, "#'");
+		AddString(sw, toString((lisp_object*)getNameNamespace(v->ns)));
+		AddChar(sw, '/');
+		AddString(sw, toString((lisp_object*)v->sym));
+		return WriteString(sw);
+	}
+
+	AddString(sw, "#<Var: ");
+	AddString(sw, (v->sym ? toString((lisp_object*)v->sym) : "--unnamed--"));
+	AddChar(sw, '>');
+	return WriteString(sw);
 }
