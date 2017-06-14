@@ -73,7 +73,6 @@ static const lisp_object *ListCopy(const lisp_object *obj) {
 
 const List *NewList(const lisp_object *const first) {
     List *ret = GC_MALLOC(sizeof(*ret));
-    if(ret == NULL) return NULL;
 
     List _ret = {{LIST_type, sizeof(List), toString, ListCopy, EqualBase, NULL, &List_interfaces}, first, EmptyList, 1};
     memcpy(ret, &_ret, sizeof(*ret));

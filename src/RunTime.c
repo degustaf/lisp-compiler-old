@@ -144,8 +144,7 @@ static const lisp_object *invokeInNS(__attribute__((unused)) const IFn *self, co
 }
 
 static const lisp_object *invokeLoadFile(__attribute__((unused)) const IFn *self, __attribute__((unused)) const lisp_object *arg1) {
-	// TODO requires compiler.loadFile
-	return NULL;
+	return NULL;	// TODO requires compiler.loadFile
 }
 
 static void load(const char *scriptbase, bool failIfNotFound) {

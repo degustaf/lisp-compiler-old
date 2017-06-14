@@ -166,7 +166,10 @@ const ISeq *seq(const lisp_object *obj) {
 	if(isSeqable(obj))
 		return obj->fns->SeqableFns->seq((const Seqable*) obj);
 
-	return (const ISeq*) NewError(0, "Don't know how to create ISeq from: %s.", object_type_string[obj->type]);
+	exception e = {IllegalArgumentException, WriteString(AddString(AddString(NewStringWriter(), "Don't know how to create ISeq from: "),
+				object_type_string[obj->type]))};
+	Raise(e);
+	__builtin_unreachable();
 }
 
 const lisp_object *first(const lisp_object *x) {

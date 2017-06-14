@@ -628,6 +628,7 @@ static const lisp_object* EvalInvoke(const Expr *self) {
 		exception e = {CompilerException, _ctx.id->msg};
 		Raise(e);
 	ENDTRY
+	__builtin_unreachable();
 }
 
 static const lisp_object* sigTag(size_t argCount, const Var *v) {
@@ -860,6 +861,7 @@ static const lisp_object* EvalDef(const Expr *self) {
 		exception e = {CompilerException, _ctx.id->msg};
 		Raise(e);
 	ENDTRY
+	__builtin_unreachable();
 }
 
 static Expr* NewDefExpr(const char *source, int line, int column, Var *v, const Expr *init, const Expr *meta, bool initProvided, bool isDynamic, bool shadowsCoreMapping) {
@@ -1099,7 +1101,7 @@ static const lisp_object* macroExpand1(const lisp_object *x) {
 	// 	const Symbol *sym = (Symbol*) op;
 	// 	if(namesStaticMember(sym)) {
 	// 	}
-	// 	// TODO macroExpand1
+	// 	macroExpand1
 	// }
 	return x;
 }
@@ -1120,7 +1122,6 @@ static const Expr* AnalyzeSeq(Expr_Context context, const ISeq *form, const char
 	if(op == NULL) {
 		exception e = {IllegalArgumentException, WriteString(AddString(AddString(NewStringWriter(), "Can't call nil, form: "), toString((lisp_object*)form)))};
 		Raise(e);
-		return NULL;
 	}
 	// const ISeq *next = form->obj.fns->ISeqFns->next(form);
 	// IFn *inlined = isInline(op, next->obj.fns->ICollectionFns->count((ICollection*)next));	// TODO isInline
@@ -1254,8 +1255,7 @@ __attribute__((unused)) static const char* demunge(const char *mungedName) {
 }
 
 static const object_type* maybePrimitiveType(__attribute__((unused)) const Expr *e) {
-	// TODO maybePrimitiveType
-	return NULL;
+	return NULL;	// TODO maybePrimitiveType
 }
 
 static const lisp_object* resolveIn(Namespace *n, const Symbol *sym, bool allowPrivate) {
@@ -1343,9 +1343,25 @@ const lisp_object* Eval(const lisp_object *form) {
 
 const lisp_object* compilerLoad(FILE *reader, __attribute__((unused)) const char *path, __attribute__((unused)) const char *name) {
 	const lisp_object *ret = NULL;
-	// const lisp_object *mapArgs[] = {(const lisp_object*)NewString(path), (const lisp_object*)NewString(name)};
-	// size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
-	// TODO pushThreadBindings
+	const lisp_object *mapArgs[] = {
+		(lisp_object*)SOURCE_PATH, (lisp_object*)NewString(path),
+		(lisp_object*)SOURCE, (lisp_object*)NewString(name),
+		(lisp_object*)METHOD, NULL,
+		(lisp_object*)LOCAL_ENV, NULL,
+		// LOOP_LOCALS, NULL,	// TODO
+		// NEXT_LOCAL_NUM, NewInteger(0),	// TODO
+		// READEVAL, True,	// TODO
+		(lisp_object*)Current_ns, deref(Current_ns),
+		// LINE_BEFORE	// TODO
+		// COLUMN_BEFORE	// TODO
+		// LINE_AFTER	// TODO
+		// COLUMN_AFTER	// TODO
+		// UNCHECKED_MATH, deref(UNCHECKED_MATH),	// TODO
+		// WARN_ON_REFLECTION, deref(WARN_ON_REFLECTION),	// TODO
+		// DATA_READERS, deref(DATA_READERS),	// TODO
+	};
+	size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
+	pushThreadBindings((IMap*)CreateHashMap(mapArgc, mapArgs));
 	TRY
 		for(const lisp_object *r = read(reader, false, '\0'); r->type != EOF_type; r = read(reader, false, '\0')) {
 			if(r->type == ERROR_type) {
@@ -1357,15 +1373,13 @@ const lisp_object* compilerLoad(FILE *reader, __attribute__((unused)) const char
 			// set(LINE_BEFORE, ...);	// TODO
 			// set(COLUMN_BEFORE, ...);	// TODO
 		}
-	EXCEPT(ReaderExcp)
-		exception e = {CompilerException, _ctx.id->msg};
-		Raise(e);
 	EXCEPT(CompilerExcp)
 		ReRaise;
 	EXCEPT(ANY)
 		exception e = {CompilerException, _ctx.id->msg};
-		Raise(e);
-	// TODO
+	Raise(e);
+	FINALLY
+		popThreadBindings();
 	ENDTRY
-	return ret;
+		return ret;
 }

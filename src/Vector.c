@@ -375,8 +375,7 @@ const Vector *CreateVector(size_t count, const lisp_object **entries) {
 }
 
 static const lisp_object *VectorCopy(__attribute__((unused)) const lisp_object *obj){
-    // TODO		// VectorCopy
-    return NULL;
+    return NULL;	// TODO		// VectorCopy
 }
 
 static TransientVector *asTransient(const Vector *v) {

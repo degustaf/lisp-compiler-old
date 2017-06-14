@@ -5,32 +5,32 @@
 
 const lisp_object* invoke0AFn(const IFn *self) {
 	NewArityError(0, object_type_string[self->obj.type]);
-	return NULL;
+	__builtin_unreachable();
 }
 
 const lisp_object* invoke1AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1) {
 	NewArityError(0, object_type_string[self->obj.type]);
-	return NULL;
+	__builtin_unreachable();
 }
 
 const lisp_object* invoke2AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1, __attribute__((unused)) const lisp_object *arg2) {
 	NewArityError(0, object_type_string[self->obj.type]);
-	return NULL;
+	__builtin_unreachable();
 }
 
 const lisp_object* invoke3AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1, __attribute__((unused)) const lisp_object *arg2, __attribute__((unused)) const lisp_object *arg3) {
 	NewArityError(0, object_type_string[self->obj.type]);
-	return NULL;
+	__builtin_unreachable();
 }
 
 const lisp_object* invoke4AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1, __attribute__((unused)) const lisp_object *arg2, __attribute__((unused)) const lisp_object *arg3, __attribute__((unused)) const lisp_object *arg4) {
 	NewArityError(0, object_type_string[self->obj.type]);
-	return NULL;
+	__builtin_unreachable();
 }
 
 const lisp_object* invoke5AFn(const IFn *self, __attribute__((unused)) const lisp_object *arg1, __attribute__((unused)) const lisp_object *arg2, __attribute__((unused)) const lisp_object *arg3, __attribute__((unused)) const lisp_object *arg4, __attribute__((unused)) const lisp_object *arg5) {
 	NewArityError(0, object_type_string[self->obj.type]);
-	return NULL;
+	__builtin_unreachable();
 }
 
 const lisp_object* applyToAFn(const IFn *self, const ISeq *args) {
@@ -63,5 +63,5 @@ const lisp_object* applyToAFn(const IFn *self, const ISeq *args) {
 			Raise(e);
 		}
 	}
-	return NULL;
+	__builtin_unreachable();
 }

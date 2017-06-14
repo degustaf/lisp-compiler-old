@@ -901,8 +901,10 @@ static const IMap* consHashMap(const IMap *im, const lisp_object *obj) {
 
 	if(isIVector(obj)) {
 		const IVector* v = (const IVector*) obj;
-		if(v->obj.fns->ICollectionFns->count((ICollection*)v) != 2)
-			return (const IMap*) NewError(false, "Vector arg to map conj must be a pair");
+		if(v->obj.fns->ICollectionFns->count((ICollection*)v) != 2) {
+			exception e = {IllegalArgumentException, "Vector arg to map conj must be a pair"};
+			Raise(e);
+		}
 		return assocHashMap(im, v->obj.fns->IVectorFns->nth(v, 0, NULL), v->obj.fns->IVectorFns->nth(v, 1, NULL));
 	}
 

@@ -21,9 +21,9 @@
 #include "Util.h"
 #include "Vector.h"
 
-lisp_object DONE_lisp_object = {DONE_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
-lisp_object NOOP_lisp_object = {NOOP_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
-
+const lisp_object DONE_lisp_object = {DONE_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
+const lisp_object NOOP_lisp_object = {NOOP_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
+const lisp_object EOF_lisp_object  = {EOF_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
 regex_t symbol_regex;
 
 typedef const lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
@@ -53,14 +53,14 @@ void init_reader() {
 	printf("In init_reader\n");
 	fflush(stdout);
 
-    macros['\\'] = CharReader;
-    macros['"']  = StringReader;
-    macros['(']  = ListReader;
-    macros[')']  = UnmatchedParenReader;
-    macros['[']  = VectorReader;
-    macros[']']  = UnmatchedParenReader;
-    macros['{']  = MapReader;
-    macros['}']  = UnmatchedParenReader;
+	macros['\\'] = CharReader;
+	macros['"']  = StringReader;
+	macros['(']  = ListReader;
+	macros[')']  = UnmatchedParenReader;
+	macros['[']  = VectorReader;
+	macros[']']  = UnmatchedParenReader;
+	macros['{']  = MapReader;
+	macros['}']  = UnmatchedParenReader;
 	macros['\''] = WrappingReader;
 	// macros['@']  = WrappingReader;
 	macros[';']  = CommentReader;
@@ -77,62 +77,63 @@ void init_reader() {
 		fprintf(stderr, "Unable to compile regex pattern: %s\n", pattern);
 		exit(i);
 	}
-	
+
 }
 
 const lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
-    int ch = getc(input);
+	int ch = getc(input);
 
-    while(true) {
-        while(isspace(ch)){
-            ch = getc(input);
-        }
+	while(true) {
+		while(isspace(ch)){
+			ch = getc(input);
+		}
 
-        if(ch == EOF) {
-            if(EOF_is_error) {
-                return (lisp_object*) NewError(false, "EOF while reading");
-            }
-            return (lisp_object*) NewError(true, "EOF while reading");
-        }
+		if(ch == EOF) {
+			if(EOF_is_error) {
+				exception e = {RuntimeException, "EOF while reading."};
+				Raise(e);
+			}
+			return &EOF_lisp_object;
+		}
 
-        if(ch == return_on) {
-            return &DONE_lisp_object;
-        }
+		if(ch == return_on) {
+			return &DONE_lisp_object;
+		}
 
-        MacroFn macro = get_macro(ch);
-        if(macro) {
-            const lisp_object *ret = macro(input, (char) ch);
-            if(ret->type == NOOP_type) {
-                continue;
-            }
-            return ret;
-        }
+		MacroFn macro = get_macro(ch);
+		if(macro) {
+			const lisp_object *ret = macro(input, (char) ch);
+			if(ret->type == NOOP_type) {
+				continue;
+			}
+			return ret;
+		}
 
-        if(ch == '+' || ch == '-') {
-            int ch2 = getc(input);
-            if(isdigit(ch2)) {
-                ungetc(ch2, input);
-                return ReadNumber(input, ch);
-            }
-        }
+		if(ch == '+' || ch == '-') {
+			int ch2 = getc(input);
+			if(isdigit(ch2)) {
+				ungetc(ch2, input);
+				return ReadNumber(input, ch);
+			}
+		}
 
-        if(isdigit(ch)) {
-            return ReadNumber(input, ch);
-        }
+		if(isdigit(ch)) {
+			return ReadNumber(input, ch);
+		}
 
-        char* token = ReadToken(input, ch);
+		char* token = ReadToken(input, ch);
 		printf("token = %s\n", token);
 		fflush(stdout);
-        const lisp_object *ret = interpretToken(token);
-        return ret;
-    }
+		const lisp_object *ret = interpretToken(token);
+		return ret;
+	}
 }
 
 static MacroFn get_macro(int ch) {
-    if((size_t)ch < sizeof(macros)/sizeof(*macros)) {
-        return macros[ch];
-    }
-    return NULL;
+	if((size_t)ch < sizeof(macros)/sizeof(*macros)) {
+		return macros[ch];
+	}
+	return NULL;
 }
 
 static bool isMacro(int ch) {
@@ -140,66 +141,63 @@ static bool isMacro(int ch) {
 }
 
 static bool isTerminatingMacro(int ch) {
-    return ch != '#' && ch != '\'' && ch != '%' && isMacro(ch);
+	return ch != '#' && ch != '\'' && ch != '%' && isMacro(ch);
 }
 
 static lisp_object* ReadNumber(FILE *input, char ch) {
-    size_t i = 1;
-    size_t size = 256;
-    char *buffer = GC_MALLOC_ATOMIC(size * sizeof(*buffer));
+	size_t i = 1;
+	size_t size = 256;
+	char *buffer = GC_MALLOC_ATOMIC(size * sizeof(*buffer));
 	assert(buffer);
 
-    for(buffer[0] = ch; true; size *= 2) {
-        for( ;i<size; i++) {
-            int ch2 = getc(input);
-            if(ch2 == EOF || isspace(ch2) || isMacro(ch2)) {
-                ungetc(ch2, input);
-                char *endptr = NULL;
-                errno = 0;
-                buffer[i] = '\0';
-                long ret_l = strtol(buffer, &endptr, 0);
-                if(errno == 0 && endptr == buffer + i) {
-                    lisp_object *ret = (lisp_object*) NewInteger(ret_l);
-                    return ret;
-                }
-                errno = 0;
-                double ret_d = strtod(buffer, &endptr);
-                if(errno == 0 && endptr == buffer + i) {
-                    lisp_object *ret = (lisp_object*) NewFloat(ret_d);
-                    return ret;
-                }
-				size_t len = strlen(buffer) + 20;
-				char *ErrBuffer = GC_MALLOC_ATOMIC(len * sizeof(*ErrBuffer));
-                snprintf(ErrBuffer, len, "Invalid number: %s", buffer);
-				lisp_object *ret = (lisp_object*) NewError(false, "Invalid number: %s", buffer);
-                return ret;
-            }
-            buffer[i] = ch2;
-        }
-        buffer = GC_REALLOC(buffer, 2*size);
+	for(buffer[0] = ch; true; size *= 2) {
+		for( ;i<size; i++) {
+			int ch2 = getc(input);
+			if(ch2 == EOF || isspace(ch2) || isMacro(ch2)) {
+				ungetc(ch2, input);
+				char *endptr = NULL;
+				errno = 0;
+				buffer[i] = '\0';
+				long ret_l = strtol(buffer, &endptr, 0);
+				if(errno == 0 && endptr == buffer + i) {
+					lisp_object *ret = (lisp_object*) NewInteger(ret_l);
+					return ret;
+				}
+				errno = 0;
+				double ret_d = strtod(buffer, &endptr);
+				if(errno == 0 && endptr == buffer + i) {
+					lisp_object *ret = (lisp_object*) NewFloat(ret_d);
+					return ret;
+				}
+				exception e = {NumberFormatException, WriteString(AddString(AddString(NewStringWriter(), "Invalid number: "), buffer))};
+				Raise(e);
+			}
+			buffer[i] = ch2;
+		}
+		buffer = GC_REALLOC(buffer, 2*size);
 		assert(buffer);
-    }
+	}
 }
 
 static char *ReadToken(FILE *input, char ch) {
-    size_t i = 1;
-    size_t size = 256;
-    char *buffer = GC_MALLOC_ATOMIC(size * sizeof(*buffer));
+	size_t i = 1;
+	size_t size = 256;
+	char *buffer = GC_MALLOC_ATOMIC(size * sizeof(*buffer));
 	assert(buffer);
 
-    for(buffer[0] = ch; true; size *= 2) {
-        for( ;i<size; i++) {
-            int ch2 = getc(input);
-            if(ch2 == EOF || isspace(ch2) || isTerminatingMacro(ch2)) {
-                ungetc(ch2, input);
-                buffer[i] = '\0';
-                return buffer;
-            }
-            buffer[i] = ch2;
-        }
-        buffer = GC_REALLOC(buffer, 2*size);
+	for(buffer[0] = ch; true; size *= 2) {
+		for( ;i<size; i++) {
+			int ch2 = getc(input);
+			if(ch2 == EOF || isspace(ch2) || isTerminatingMacro(ch2)) {
+				ungetc(ch2, input);
+				buffer[i] = '\0';
+				return buffer;
+			}
+			buffer[i] = ch2;
+		}
+		buffer = GC_REALLOC(buffer, 2*size);
 		assert(buffer);
-    }
+	}
 }
 
 static const lisp_object *matchSymbol(const char *token) {
@@ -272,13 +270,14 @@ static const lisp_object *interpretToken(const char *token) {
 	AddString(sw, token);
 	exception e = {RuntimeException, WriteString(sw)};
 	Raise(e);
-	return NULL;	// This won't be reached, but prevents gcc Warning.
+	__builtin_unreachable();
 }
 
 static const lisp_object *CharReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
 	char ch = getc(input);
 	if(ch == EOF) {
-		return (lisp_object*) NewError(false, "EOF while reading character");
+		exception e = {RuntimeException, "EOF while reading character"};
+		Raise(e);
 	}
 
 	char *token = ReadToken(input, ch);
@@ -297,7 +296,9 @@ static const lisp_object *CharReader(FILE* input, __attribute__((unused)) char c
 	if(strcmp(token, "return") == 0)
 		return (lisp_object*)NewChar('\r');
 
-	return (lisp_object*) NewError(false, "Unsupported character: \\%s", token);
+	exception e = {RuntimeException, WriteString(AddString(AddString(NewStringWriter(), "Unsupported character: \\"), token))};
+	Raise(e);
+	__builtin_unreachable();
 }
 
 static const lisp_object *StringReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
@@ -308,12 +309,14 @@ static const lisp_object *StringReader(FILE* input, __attribute__((unused)) char
 
 	for(int ch = getc(input); ch != '"'; ch = getc(input)) {
 		if(ch == EOF) {
-			return (lisp_object*) NewError(false, "EOF while reading string.");
+			exception e = {RuntimeException, "EOF while reading string."};
+			Raise(e);
 		}
 		if(ch == '\\') {
 			ch = getc(input);
 			if(ch == EOF) {
-				return (lisp_object*) NewError(false, "EOF while reading string.");
+				exception e = {RuntimeException, "EOF while reading string."};
+				Raise(e);
 			}
 
 			switch(ch) {
@@ -335,8 +338,11 @@ static const lisp_object *StringReader(FILE* input, __attribute__((unused)) char
 				case '\\':
 				case '"':
 					break;
-				default:
-					return (lisp_object*) NewError(false, "Unsupported Escape character: \\%c", ch);
+				default: {
+							 exception e = {RuntimeException, WriteString(AddChar(AddString(NewStringWriter(),
+											 "Unsupported Escape character: \\"), ch))};
+							 Raise(e);
+						 }
 			}
 		}
 		if(i == size) {
@@ -359,7 +365,10 @@ static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *co
 
 	while(true) {
 		const lisp_object *form = read(input, true, delim);
-		if(form->type == EOF_type) return NULL;
+		if(form->type == EOF_type) {
+			exception e = {RuntimeException, "EOF while reading"};
+			Raise(e);
+		}
 		if(form == &DONE_lisp_object) {
 			*count = i;
 			return ret;
@@ -376,7 +385,6 @@ static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *co
 static const lisp_object *ListReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
 	size_t count;
 	const lisp_object **list = ReadDelimitedList(input, ')', &count);
-	if(list == NULL) return (lisp_object*) NewError(true, "");
 	if(count == 0) return (lisp_object*)EmptyList;
 	return (lisp_object*)CreateList(count, list);
 }
@@ -384,20 +392,23 @@ static const lisp_object *ListReader(FILE* input, __attribute__((unused)) char c
 static const lisp_object *VectorReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
 	size_t count;
 	const lisp_object **list = ReadDelimitedList(input, ']', &count);
-	if(list == NULL) return (lisp_object*) NewError(true, "");
 	return (lisp_object*) CreateVector(count, list);
 }
 
 static const lisp_object *MapReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
 	size_t count;
 	const lisp_object **list = ReadDelimitedList(input, '}', &count);
-	if(list == NULL) return (lisp_object*) NewError(true, "");
-	if(count & 1) return (lisp_object*) NewError(false, "Map literal must contain an even number of forms");
+	if(count & 1) {
+		exception e = {RuntimeException, "Map literal must contain an even number of forms"};
+		Raise(e);
+	}
 	return (lisp_object*)CreateHashMap(count, list);
 }
 
 static const lisp_object *UnmatchedParenReader(__attribute__((unused)) FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
-	return (lisp_object*) NewError(false, "Unmatched delimiter: %c", ch);
+	exception e = {RuntimeException, WriteString(AddChar(AddString(NewStringWriter(), "Unmatched delimiter: "), ch))};
+	Raise(e);
+	__builtin_unreachable();
 }
 
 static const lisp_object *WrappingReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
@@ -426,9 +437,9 @@ static const lisp_object *MetaReader(FILE* input, __attribute__((unused)) char c
 		case HASHMAP_type:
 			break;
 		default: {
-			exception e = {IllegalArgumentException, "Metadata must be Symbol,Keyword,String or Map"};
-			Raise(e);
-		}
+					 exception e = {IllegalArgumentException, "Metadata must be Symbol,Keyword,String or Map"};
+					 Raise(e);
+				 }
 	}
 
 	o = read(input, true, '\0');

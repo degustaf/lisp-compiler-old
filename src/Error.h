@@ -23,6 +23,7 @@ typedef enum {	// ExceptionType
 	IllegalAccessError,
 	IllegalArgumentException,
 	IllegalStateException,
+	NumberFormatException,
 	ReaderException,
 	RuntimeException,
 	UnsupportedOperationException
@@ -92,11 +93,6 @@ void Raise(exception e);
 			_es = ES_EvalBody; \
 		} \
 	}
-
-
-typedef struct ErrorStruct Error;
-
-const Error *NewError(bool EOFflag, const char *restrict format, ...);
 
 void NewArityError(size_t actual, const char *restrict name);
 
