@@ -29,6 +29,7 @@
 	TYPE(VAR_type) \
 	TYPE(IFN_type) \
 	TYPE(EXPR_type) \
+	TYPE(PATHNODE_type) \
 	TYPE(OBJMETHOD_type) \
 \
 	/* Map types. */ \

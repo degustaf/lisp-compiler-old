@@ -9,7 +9,7 @@
 
 #include "Bool.h"
 #include "Compiler.h"
-#include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
+#include "Error.h"
 #include "gc.h"
 #include "Keyword.h"
 #include "List.h"

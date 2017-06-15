@@ -7,7 +7,7 @@
 
 #include "Bool.h"
 #include "Cons.h"
-#include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
+#include "Error.h"
 #include "gc.h"
 #include "Interfaces.h"
 #include "List.h"

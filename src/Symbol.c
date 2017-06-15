@@ -49,11 +49,16 @@ const Symbol _DefSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, E
 const Symbol _DocSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "doc"};
 const Symbol _DynamicSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "dynamic"};
 const Symbol _FileSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "file"};
+const Symbol _FnOnceSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "fn*"};
+const Symbol _LetSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "let*"};
+const Symbol _LoopSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "loop"};
 const Symbol _macroSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "macro"};
 const Symbol _privateSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "private"};
 const Symbol _quoteSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "quote"};
 const Symbol _tagSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "tag"};
 
+const Symbol *FnOnceSymbol = &_FnOnceSymbol;
+const Symbol *const LoopSymbol = &_LoopSymbol;
 const Symbol *const quoteSymbol = &_quoteSymbol;
 
 const Symbol _AmpSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "&"};

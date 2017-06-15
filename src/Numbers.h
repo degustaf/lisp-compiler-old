@@ -8,11 +8,11 @@ typedef struct Float_struct Float;
 
 // Integer Functions
 Integer *NewInteger(long i);
-long IntegerValue(Integer *I);
+long IntegerValue(const Integer *I);
 
 // Float Functions
 Float *NewFloat(double x);
-double FloatValue(Float *X);
+double FloatValue(const Float *X);
 
 typedef struct {	// Number
     lisp_object obj;

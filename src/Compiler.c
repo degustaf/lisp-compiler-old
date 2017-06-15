@@ -33,7 +33,10 @@ Var *KEYWORD_CALLSITES = NULL;
 Var *KEYWORDS = NULL;
 Var *METHOD = NULL;
 Var *METHOD_RETURN_CONTEXT = NULL;
+Var *NEXT_LOCAL_NUM = NULL;
+Var *NO_RECUR = NULL;
 Var *LOCAL_ENV = NULL;
+Var *LOOP_LOCALS = NULL;
 Var *SOURCE = NULL;
 Var *SOURCE_PATH = NULL;
 Var *VARS = NULL;
@@ -52,6 +55,7 @@ typedef enum {	// expr_type
 	CONSTANTEXPR_type,
 	STRINGEXPR_type,
 	EMPTYEXPR_type,
+	LETEXPR_type,
 	METAEXPR_type,
 	MAPEXPR_type,
 	KEYWORDEXPR_type,
@@ -99,10 +103,21 @@ static void registerVar(const Var *v);
 
 // PathNode
 typedef struct PathNode_struct {
-	lisp_object *obj;
+	lisp_object obj;
 	PATHTYPE type;
 	const struct PathNode_struct *parent;
 } PathNode;
+
+static PathNode* NewPathNode(PATHTYPE type, const PathNode *parent) {
+	PathNode *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = PATHNODE_type;
+	ret->obj.size = sizeof(*ret);
+	ret->obj.fns = &NullInterface;
+
+	ret->type = type;
+	ret->parent = parent;
+	return ret;
+}
 
 static const ISeq* fwdPath(const PathNode *p) {
 	const ISeq *ret = (ISeq*) EmptyList;
@@ -947,6 +962,122 @@ static const Expr* parseDefExpr(Expr_Context context, const lisp_object *form) {
 			meta, count(form) == 3, isDynamic, shadowsCoreMapping);
 }
 
+// LetExpr
+typedef struct {	// LetExpr
+	EXPR_BASE
+	const IVector *bindingInits;
+	const Expr *body;
+	bool isLoop;
+} LetExpr;
+
+static const lisp_object* EvalLet(__attribute__((unused)) const Expr *self) {
+	exception e = {UnsupportedOperationException, "Can't eval let/loop"};
+	Raise(e);
+	__builtin_unreachable();
+}
+
+static Expr* NewLetExpr(const IVector *bindingInits, const Expr *body, bool isLoop) {
+	LetExpr *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = EXPR_type;
+	ret->obj.fns = &NullInterface;
+	ret->type = LETEXPR_type;
+	ret->Eval = EvalLet;
+
+	ret->bindingInits = bindingInits;
+	ret->body = body;
+	ret->isLoop = isLoop;
+	return (Expr*) ret;
+}
+
+static const Expr* parseLetExpr(Expr_Context context, const lisp_object *form) {
+	bool isLoop = Equals(first(form), (lisp_object*)LoopSymbol);
+	if(!isIVector(second(form))) {
+		exception e = {IllegalArgumentException, "Bad binding form, expected vector"};
+		Raise(e);
+	}
+
+	const IVector *bindings = (IVector*) second(form);
+	if(bindings->obj.fns->ICollectionFns->count((ICollection*)bindings) & 1) {
+		exception e = {IllegalArgumentException, "Bad binding form, expected matched symbol expression pairs"};
+		Raise(e);
+	}
+
+	const ISeq *body = next((lisp_object*)next(form));
+
+	if(context == EVAL || (context == EXPRESSION && isLoop))
+		Analyze(context, (lisp_object*)listStar1((lisp_object*)listStar2((lisp_object*)FnOnceSymbol, (lisp_object*)EmptyVector, (ISeq*)form), NULL), NULL);
+	ObjMethod *method = (ObjMethod*)deref(METHOD);
+	const IMap *backupMethodLocals = method->locals;
+	const IMap *backupMethodIndexLocals = method->indexLocals;
+	const IVector *recurMismatches = (IVector*)EmptyVector;
+
+	for(size_t i = 0; i < bindings->obj.fns->ICollectionFns->count((ICollection*)bindings)/2; i++)
+		recurMismatches = recurMismatches->obj.fns->IVectorFns->cons(recurMismatches, (lisp_object*)False);
+
+	while(true) {
+		const lisp_object *mapArgs[] = {(lisp_object*)LOCAL_ENV, deref(LOCAL_ENV), (lisp_object*)NEXT_LOCAL_NUM, deref(NEXT_LOCAL_NUM)};
+		size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
+		const IMap *dynamicBindings = (IMap*)CreateHashMap(mapArgc, mapArgs);
+
+		method->locals = backupMethodLocals;
+		method->indexLocals = backupMethodIndexLocals;
+		const PathNode *loopRoot = NewPathNode(PATH, (PathNode*)getVar(CLEAR_PATH));
+		const PathNode *clearRoot = NewPathNode(PATH, loopRoot);
+		const PathNode *clearPath = NewPathNode(PATH, loopRoot);
+
+		if(isLoop)
+			dynamicBindings = dynamicBindings->obj.fns->IMapFns->assoc(dynamicBindings, (lisp_object*)LOOP_LOCALS, NULL);
+		TRY
+			pushThreadBindings(dynamicBindings);
+			const IVector *bindingInits = (IVector*)EmptyVector;
+			const IVector *loopLocals = (IVector*)EmptyVector;
+			for(size_t i = 0; i < bindings->obj.fns->ICollectionFns->count((ICollection*)bindings); i+=2) {
+				const lisp_object *obj = bindings->obj.fns->IVectorFns->nth(bindings, i, NULL);
+				if(obj->type != SYMBOL_type) {
+					exception e = {IllegalArgumentException, WriteString(AddString(AddString(NewStringWriter(),
+									"Bad binding form, expected symbol, got: "), toString(obj)))};
+					Raise(e);
+				}
+				const Symbol *sym = (Symbol*) obj;
+				if(getNamespaceSymbol(sym)) {
+					exception e = {RuntimeException, WriteString(AddString(AddString(NewStringWriter(),
+									"Can't let qualified name: "), toString(obj)))};
+					Raise(e);
+				}
+				const Expr *init = Analyze(EXPRESSION, bindings->obj.fns->IVectorFns->nth(bindings, i+1, NULL), getNameSymbol(sym));
+				if(isLoop) {
+					if(boolCast(recurMismatches->obj.fns->IVectorFns->nth(recurMismatches, 1/2, NULL))) {
+						// init = StaticMethodExpr(...)		// TODO
+					} else if(*maybePrimitiveType(init) == INTEGER_type) {
+						// init = StaticMethodExpr(...)		// TODO
+					} else if(*maybePrimitiveType(init) == FLOAT_type) {
+						// init = StaticMethodExpr(...)		// TODO
+					}
+				}
+
+				TRY
+					if(isLoop) {
+						const lisp_object* mapArgs[] = {
+							(lisp_object*)CLEAR_PATH, (lisp_object*)clearPath,
+							(lisp_object*)CLEAR_ROOT, (lisp_object*)clearRoot,
+							(lisp_object*)NO_RECUR, NULL
+						};
+						size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
+						pushThreadBindings((IMap*)CreateHashMap(mapArgc, mapArgs));
+						// LocalBinding *lb = registerLocal	// TODO
+					}
+				FINALLY
+					if(isLoop)
+						popThreadBindings();
+				ENDTRY
+				// TODO
+			}
+		FINALLY
+			popThreadBindings();
+		ENDTRY
+	}
+}
+
 // IParser
 typedef const Expr* (*IParser)(Expr_Context context, const lisp_object *form);
 typedef struct {	// Special
@@ -955,6 +1086,7 @@ typedef struct {	// Special
 } Special;
 const Special specials[] = {
 	{&_DefSymbol, &parseDefExpr},
+	{&_LetSymbol, NULL},	// TODO
 	{&_quoteSymbol, &parseConstant},
 };
 const size_t special_count = sizeof(specials)/sizeof(specials[0]);
@@ -1020,6 +1152,24 @@ static int registerKeywordCallsite(const Keyword *k) {
 
 __attribute__((unused)) static bool namesStaticMember(const Symbol *sym) {
 	return getNamespaceSymbol(sym) && namespaceFor(CurrentNS(), sym) == NULL;
+}
+
+static size_t getAndIncLocalNum() {
+	const Integer *I = (Integer*)deref(NEXT_LOCAL_NUM);
+	assert(((lisp_object*)I)->type == INTEGER_type);
+	const size_t i = IntegerValue(I);
+	ObjMethod *m = (ObjMethod*)deref(METHOD);
+	if(i > m->maxLocal)
+		m->maxLocal = i;
+	setVar(NEXT_LOCAL_NUM, (lisp_object*)NewInteger(i+1));
+	return i;
+}
+
+static const LocalBinding* registerLocal(const Symbol *sym,  const Symbol *tag, const Expr *init, bool isArg) {
+	size_t num = getAndIncLocalNum();
+	const LocalBinding *b = NewLocalBinding(num, sym, tag, init, isArg, (PathNode*) getVar(CLEAR_ROOT));
+	const IMap *localsMap = (IMap*)deref(LOCAL_ENV);
+	setVar(LOCAL_ENV, assoc(localsMap, b->sym, b));
 }
 
 static void registerVar(const Var *v) {
@@ -1300,6 +1450,9 @@ static const lisp_object* resolveIn(Namespace *n, const Symbol *sym, bool allowP
 
 
 void initCompiler(void) {
+	const lisp_object *mapArgs[] = {(lisp_object*)internKeyword2(NULL, "once"), (lisp_object*)True};
+	FnOnceSymbol = (Symbol*)withMeta((lisp_object*)FnOnceSymbol, (IMap*)CreateHashMap(2, mapArgs));
+
 	ALLOW_UNRESOLVED_VARS = setDynamic(internVar(LISP_ns, internSymbol1("*allow-unresolved-vars*"), (lisp_object*)False, true));
 	CLEAR_PATH = setDynamic(createVar(NULL));
 	CLEAR_ROOT = setDynamic(createVar(NULL));
@@ -1314,7 +1467,10 @@ void initCompiler(void) {
 	KEYWORDS = setDynamic(createVar(NULL));
 	METHOD = setDynamic(createVar(NULL));
 	METHOD_RETURN_CONTEXT = setDynamic(createVar(NULL));
+	NEXT_LOCAL_NUM = setDynamic(createVar((lisp_object*)NewInteger(0)));
+	NO_RECUR = setDynamic(createVar(NULL));
 	LOCAL_ENV = setDynamic(createVar(NULL));
+	LOOP_LOCALS = setDynamic(createVar(NULL));
 	SOURCE = setDynamic(internVar(findOrCreateNS(internSymbol1("lisp.core")), internSymbol1("*source-path*"), (lisp_object*)NewString("NO_SOURCE_FILE"), true));
 	SOURCE_PATH = setDynamic(internVar(findOrCreateNS(internSymbol1("lisp.core")), internSymbol1("*file*"), (lisp_object*)NewString("NO_SOURCE_PATH"), true));
 	VARS = setDynamic(createVar(NULL));
@@ -1349,7 +1505,7 @@ const lisp_object* compilerLoad(FILE *reader, __attribute__((unused)) const char
 		(lisp_object*)METHOD, NULL,
 		(lisp_object*)LOCAL_ENV, NULL,
 		// LOOP_LOCALS, NULL,	// TODO
-		// NEXT_LOCAL_NUM, NewInteger(0),	// TODO
+		(lisp_object*)NEXT_LOCAL_NUM, (lisp_object*)NewInteger(0),
 		// READEVAL, True,	// TODO
 		(lisp_object*)Current_ns, deref(Current_ns),
 		// LINE_BEFORE	// TODO

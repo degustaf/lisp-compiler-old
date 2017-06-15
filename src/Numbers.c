@@ -45,7 +45,7 @@ Integer *NewInteger(long i) {
     return ret;
 }
 
-long IntegerValue(Integer *I) {
+long IntegerValue(const Integer *I) {
     return I->val;
 }
 
@@ -88,6 +88,6 @@ Float *NewFloat(double x) {
     return ret;
 }
 
-double FloatValue(Float *X) {
+double FloatValue(const Float *X) {
     return X->val;
 }

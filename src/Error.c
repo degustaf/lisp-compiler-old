@@ -1,4 +1,4 @@
-#include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
+#include "Error.h"
 
 #include <assert.h>
 #include <stdarg.h>

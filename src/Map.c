@@ -8,7 +8,7 @@
 #include "AFn.h"
 #include "ASeq.h"
 #include "Cons.h"
-#include "Error.h"	// TODO convert Errors to use setjmp/longjmp.
+#include "Error.h"
 #include "gc.h"
 #include "Interfaces.h"
 #include "intrinsics.h"

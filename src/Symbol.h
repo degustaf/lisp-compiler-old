@@ -17,11 +17,16 @@ extern const Symbol _DefSymbol;
 extern const Symbol _DocSymbol;
 extern const Symbol _DynamicSymbol;
 extern const Symbol _FileSymbol;
+extern const Symbol _FnOnceSymbol;
+extern const Symbol _LetSymbol;
+extern const Symbol _LoopSymbol;
 extern const Symbol _macroSymbol;
 extern const Symbol _privateSymbol;
 extern const Symbol _quoteSymbol;
 extern const Symbol _tagSymbol;
 
+extern const Symbol *FnOnceSymbol;
+extern const Symbol *const LoopSymbol;
 extern const Symbol *const quoteSymbol;
 
 extern const Symbol *const AmpSymbol;
