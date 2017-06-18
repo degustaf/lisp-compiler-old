@@ -63,6 +63,14 @@ const Symbol* getNameNamespace(const Namespace *ns) {
 }
 
 Var *internNS(Namespace *ns, const Symbol *s) {
+	printf("In internNS\n");
+	printf("ns = %p\n", (void*)ns);
+	if(ns)
+		printf("ns = %s\n", toString((lisp_object*)ns));
+	printf("s = %p\n", (void*)s);
+	if(s)
+		printf("s = %s\n", toString((lisp_object*)s));
+	fflush(stdout);
 	if(getNamespaceSymbol(s)) {
 		exception e = {IllegalArgumentException, "Can't intern namespace-qualified symbol"};
 		Raise(e);
@@ -108,4 +116,8 @@ static const char *toStringNamespace(const lisp_object *obj) {
 	assert(obj->type == NAMESPACE_type);
 	const Namespace *ns = (Namespace*)obj;
 	return toString((lisp_object*)ns->name);
+}
+
+const char* toStringMapping(const Namespace *ns) {
+	return toString((lisp_object*)ns->mappings);
 }

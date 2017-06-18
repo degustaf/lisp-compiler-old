@@ -65,7 +65,8 @@ typedef enum {	// expr_type
 	LOCALBINDINGEXPR_type,
 	OBJEXPR_type,
 	VECTOREXPR_type,
-	DEFEXPR_type
+	DEFEXPR_type,
+	BODYEXPR_type,
 } expr_type;
 
 #define EXPR_BASE \
@@ -291,6 +292,46 @@ static LocalBinding* referenceLocal(const Symbol *sym) {
 	}
 
 	return b;
+}
+
+static size_t getAndIncLocalNum() {
+	const Integer *I = (Integer*)deref(NEXT_LOCAL_NUM);
+	assert(((lisp_object*)I)->type == INTEGER_type);
+	const size_t i = IntegerValue(I);
+	ObjMethod *m = (ObjMethod*)deref(METHOD);
+	if(i > m->maxLocal)
+		m->maxLocal = i;
+	setVar(NEXT_LOCAL_NUM, (lisp_object*)NewInteger(i+1));
+	return i;
+}
+
+static const LocalBinding* registerLocal(const Symbol *sym,  const Symbol *tag, const Expr *init, bool isArg) {
+	size_t num = getAndIncLocalNum();
+	const LocalBinding *b = NewLocalBinding(num, sym, tag, init, isArg, (PathNode*) getVar(CLEAR_ROOT));
+	const IMap *localsMap = (IMap*)deref(LOCAL_ENV);
+	setVar(LOCAL_ENV, assoc((lisp_object*)localsMap, (lisp_object*)b->sym, (lisp_object*)b));
+	ObjMethod *method = (ObjMethod*)deref(METHOD);
+	method->locals = (IMap*)assoc((lisp_object*)method->locals, (lisp_object*)b, (lisp_object*)b);
+	method->indexLocals = (IMap*)assoc((lisp_object*)method->indexLocals, (lisp_object*)NewInteger(num), (lisp_object*)b);
+
+	return b;
+}
+
+// BindingInit
+typedef struct {
+	lisp_object obj;
+	const LocalBinding *binding;
+	const Expr *Init;
+} BindingInit;
+
+static const BindingInit* NewBindingInit(const LocalBinding *binding, const Expr *Init) {
+	BindingInit *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = BINDINGINIT_type;
+	ret->obj.fns = &NullInterface;
+
+	ret->binding = binding;
+	ret->Init = Init;
+	return ret;
 }
 
 // NilExpr
@@ -962,6 +1003,54 @@ static const Expr* parseDefExpr(Expr_Context context, const lisp_object *form) {
 			meta, count(form) == 3, isDynamic, shadowsCoreMapping);
 }
 
+// BodyExpr
+typedef struct {	// BodyExpr
+	EXPR_BASE
+	const IVector *exprs;
+} BodyExpr;
+
+static const lisp_object* EvalBody(const Expr *self) {
+	assert(self->type == BODYEXPR_type);
+	const BodyExpr *b = (BodyExpr*)self;
+	const lisp_object *ret = NULL;
+	for(const ISeq *s = b->exprs->obj.fns->SeqableFns->seq((Seqable*)b->exprs); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
+		const Expr *e = (Expr*) s->obj.fns->ISeqFns->first(s);
+		ret = e->Eval(e);
+	}
+	return ret;
+}
+
+static const Expr* NewBodyExpr(const IVector *exprs) {
+	BodyExpr *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = EXPR_type;
+	ret->obj.fns = &NullInterface;
+	ret->type = BODYEXPR_type;
+	ret->Eval = EvalBody;
+
+	ret->exprs = exprs;
+	return (Expr*)ret;
+}
+
+static const Expr* parseBodyExpr(Expr_Context context, const lisp_object *form) {
+	assert(isISeq(form));
+	const ISeq *forms = (ISeq*)form;
+	if(Equals((lisp_object*)DoSymbol, first((form))))
+		forms = next((lisp_object*)forms);
+
+	const IVector *exprs = (IVector*)EmptyVector;
+	for(; forms != NULL; forms = forms->obj.fns->ISeqFns->next(forms)) {
+		const Expr *e = Analyze(
+				(context != EVAL && (context == STATEMENT || forms->obj.fns->ISeqFns->next(forms))) ? STATEMENT : context,
+				forms->obj.fns->ISeqFns->first(forms),
+				NULL);
+		exprs = exprs->obj.fns->IVectorFns->cons(exprs, (lisp_object*)e);
+	}
+
+	if(count((lisp_object*)exprs) == 0)
+		exprs = exprs->obj.fns->IVectorFns->cons(exprs, (lisp_object*)NilExpr);
+	return NewBodyExpr(exprs);
+}
+
 // LetExpr
 typedef struct {	// LetExpr
 	EXPR_BASE
@@ -1064,14 +1153,48 @@ static const Expr* parseLetExpr(Expr_Context context, const lisp_object *form) {
 						};
 						size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
 						pushThreadBindings((IMap*)CreateHashMap(mapArgc, mapArgs));
-						// LocalBinding *lb = registerLocal	// TODO
+						const LocalBinding *lb = registerLocal(sym, tagOf((lisp_object*)sym), init, false);
+						const BindingInit *bi = NewBindingInit(lb, init);
+						bindingInits = bindingInits->obj.fns->IVectorFns->cons(bindingInits, (lisp_object*)bi);
+						if(isLoop)
+							loopLocals = loopLocals->obj.fns->IVectorFns->cons(loopLocals, (lisp_object*)bi);
 					}
 				FINALLY
 					if(isLoop)
 						popThreadBindings();
 				ENDTRY
-				// TODO
 			}
+			if(isLoop)
+				setVar(LOOP_LOCALS, (lisp_object*)loopLocals);
+
+			const Expr *bodyExpr = NULL;
+			bool moreMismatches = false;
+			TRY
+				if(isLoop) {
+					const lisp_object *mapArgs[] = {
+						(lisp_object*)CLEAR_PATH, (lisp_object*)clearPath,
+						(lisp_object*)CLEAR_ROOT, (lisp_object*)clearRoot,
+						(lisp_object*)NO_RECUR, NULL,
+						(lisp_object*)METHOD_RETURN_CONTEXT, (context == RETURN ? deref(METHOD_RETURN_CONTEXT) : NULL)
+					};
+					size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
+					pushThreadBindings((IMap*)CreateHashMap(mapArgc, mapArgs));
+					bodyExpr = parseBodyExpr((isLoop ? RETURN: context), (lisp_object*)body);
+				}
+			FINALLY
+				if(isLoop) {
+					popThreadBindings();
+					for(size_t i = 0; i < count((lisp_object*)loopLocals); i++) {
+						const LocalBinding *lb = (LocalBinding*) loopLocals->obj.fns->IVectorFns->nth(loopLocals, i, NULL);
+						if(lb->recurMismatch) {
+							recurMismatches = recurMismatches->obj.fns->IVectorFns->assoc(recurMismatches, (lisp_object*)NewInteger(i), (lisp_object*)True);
+							moreMismatches = true;
+						}
+					}
+				}
+			ENDTRY
+			if(!moreMismatches)
+				return NewLetExpr(bindingInits, bodyExpr, isLoop);
 		FINALLY
 			popThreadBindings();
 		ENDTRY
@@ -1086,8 +1209,27 @@ typedef struct {	// Special
 } Special;
 const Special specials[] = {
 	{&_DefSymbol, &parseDefExpr},
-	{&_LetSymbol, NULL},	// TODO
+	// Loop			// TODO
+	// Recur		// TODO
+	// if			// TODO
+	// case			// TODO
+	{&_LetSymbol, &parseLetExpr},
+	// LetFn		// TODO
+	{&_DoSymbol, &parseBodyExpr},
 	{&_quoteSymbol, &parseConstant},
+	// TheVar		// TODO
+	// Import		// TODO
+	// Dot			// TODO
+	// Assign		// TODO
+	// DefType		// TODO
+	// Reify		// TODO
+	// Try			// TODO
+	// Throw		// TODO
+	// MonitorEnter	// TODO
+	// MonitorExit	// TODO
+	// Catch		// TODO
+	// Finally		// TODO
+	// New			// TODO
 };
 const size_t special_count = sizeof(specials)/sizeof(specials[0]);
 IParser isSpecial(const lisp_object *sym) {
@@ -1152,24 +1294,6 @@ static int registerKeywordCallsite(const Keyword *k) {
 
 __attribute__((unused)) static bool namesStaticMember(const Symbol *sym) {
 	return getNamespaceSymbol(sym) && namespaceFor(CurrentNS(), sym) == NULL;
-}
-
-static size_t getAndIncLocalNum() {
-	const Integer *I = (Integer*)deref(NEXT_LOCAL_NUM);
-	assert(((lisp_object*)I)->type == INTEGER_type);
-	const size_t i = IntegerValue(I);
-	ObjMethod *m = (ObjMethod*)deref(METHOD);
-	if(i > m->maxLocal)
-		m->maxLocal = i;
-	setVar(NEXT_LOCAL_NUM, (lisp_object*)NewInteger(i+1));
-	return i;
-}
-
-static const LocalBinding* registerLocal(const Symbol *sym,  const Symbol *tag, const Expr *init, bool isArg) {
-	size_t num = getAndIncLocalNum();
-	const LocalBinding *b = NewLocalBinding(num, sym, tag, init, isArg, (PathNode*) getVar(CLEAR_ROOT));
-	const IMap *localsMap = (IMap*)deref(LOCAL_ENV);
-	setVar(LOCAL_ENV, assoc(localsMap, b->sym, b));
 }
 
 static void registerVar(const Var *v) {
@@ -1288,17 +1412,43 @@ static const Expr* AnalyzeSeq(Expr_Context context, const ISeq *form, const char
 }
 
 static const Expr* analyzeSymbol(const Symbol *sym) {
+	printf("In AnanlyzeSymbol.\n");
+	printf("sym = %p\n", (void*)sym);
+	if(sym)
+		printf("sym = %s\n", toString((lisp_object*)sym));
+	const char *ns = getNamespaceSymbol(sym);
+	printf("Got ns.\n");
+	printf("ns = %p\n", ns);
+	if(ns)
+		printf("sym.ns = %s\n", ns);
+	fflush(stdout);
 	const Symbol *tag = tagOf((lisp_object*)sym);
+	printf("tag = %p\n", (void*)tag);
+	if(tag)
+		printf("tag = %s\n", toString((lisp_object*)tag));
+	fflush(stdout);
 	if(getNamespaceSymbol(sym) == NULL) {
 		LocalBinding *b = referenceLocal(sym);
+		printf("b = %p\n", (void*) b);
+		fflush(stdout);
 		if(b)
 			return NewLocalBindingExpr(b, tag);
 	} else if(namespaceFor(CurrentNS(), sym) == NULL) {
 		__attribute__((unused)) const Symbol *nsSym = internSymbol1(getNamespaceSymbol(sym));
 		// TODO requires HostExpr.maybeClass and StaticFieldExpr
 	}
+	printf("after if/else clause.\n");
+	fflush(stdout);
+
+	printf("CurrentNS = %s\n", toString((lisp_object*)CurrentNS()));
+	fflush(stdout);
 
 	const lisp_object *o = resolveIn(CurrentNS(), sym, false);
+	printf("Got o.\n");
+	printf("o = %p\n", (void*)o);
+	if(o)
+		printf("o = %s\n", toString(o));
+	fflush(stdout);
 	switch(o->type) {
 		case VAR_type: {
 			const Var *v = (Var*)o;
@@ -1409,6 +1559,8 @@ static const object_type* maybePrimitiveType(__attribute__((unused)) const Expr 
 }
 
 static const lisp_object* resolveIn(Namespace *n, const Symbol *sym, bool allowPrivate) {
+	printf("In resolveIn\n");
+	printf("n = %s\n", toStringMapping(n));
 	if(getNamespaceSymbol(sym)) {
 		const Namespace *ns = namespaceFor(n, sym);
 		if(ns == NULL) {
@@ -1483,7 +1635,12 @@ Namespace* CurrentNS(void) {
 }
 
 const lisp_object* Eval(const lisp_object *form) {
+	printf("form = %s\n", toString(form));
+	fflush(stdout);
 	form = macroExpand(form);
+	printf("form = %s\n", toString(form));
+	printf("form->type = %s\n", object_type_string[form->type]);
+	fflush(stdout);
 	if(isISeq(form)) {
 		const ISeq *s = (ISeq*)form;
 		if(Equals((lisp_object*)DoSymbol, s->obj.fns->ISeqFns->first(s))) {

@@ -18,4 +18,6 @@ Var *internNS(Namespace *ns, const Symbol *s);
 Var *findInternedVar(const Namespace *ns, const Symbol *s);
 const lisp_object* getMapping(const Namespace *ns, const Symbol *s);
 
+const char* toStringMapping(const Namespace *ns);
+
 #endif /* NAMESPACE_H */

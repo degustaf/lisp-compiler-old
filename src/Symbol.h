@@ -14,6 +14,7 @@ const char *getNamespaceSymbol(const Symbol *s);
 extern const Symbol _arglistsSymbol;
 extern const Symbol _ConstSymbol;
 extern const Symbol _DefSymbol;
+extern const Symbol _DoSymbol;
 extern const Symbol _DocSymbol;
 extern const Symbol _DynamicSymbol;
 extern const Symbol _FileSymbol;
@@ -25,13 +26,13 @@ extern const Symbol _privateSymbol;
 extern const Symbol _quoteSymbol;
 extern const Symbol _tagSymbol;
 
-extern const Symbol *FnOnceSymbol;
+extern const Symbol *const DoSymbol;
+extern const Symbol *FnOnceSymbol;	// This Symbol is modified during Compiler initialization.
 extern const Symbol *const LoopSymbol;
 extern const Symbol *const quoteSymbol;
 
 extern const Symbol *const AmpSymbol;
 extern const Symbol *const derefSymbol;
-extern const Symbol *const DoSymbol;
 extern const Symbol *const FNSymbol;
 extern const Symbol *const inNamespaceSymbol;
 extern const Symbol *const in_nsSymbol;

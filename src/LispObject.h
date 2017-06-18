@@ -31,6 +31,7 @@
 	TYPE(EXPR_type) \
 	TYPE(PATHNODE_type) \
 	TYPE(OBJMETHOD_type) \
+	TYPE(BINDINGINIT_type) \
 \
 	/* Map types. */ \
 	TYPE(BMI_NODE_type) \

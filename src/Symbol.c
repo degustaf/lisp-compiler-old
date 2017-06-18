@@ -46,6 +46,7 @@ interfaces Symbol_interfaces = {
 const Symbol _arglistsSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "arglists"};
 const Symbol _ConstSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "const"};
 const Symbol _DefSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "def"};
+const Symbol _DoSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "do"};
 const Symbol _DocSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "doc"};
 const Symbol _DynamicSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "dynamic"};
 const Symbol _FileSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "file"};
@@ -57,7 +58,8 @@ const Symbol _privateSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NUL
 const Symbol _quoteSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "quote"};
 const Symbol _tagSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "tag"};
 
-const Symbol *FnOnceSymbol = &_FnOnceSymbol;
+const Symbol *const DoSymbol = &_DoSymbol;
+const Symbol *FnOnceSymbol = &_FnOnceSymbol;	// This Symbol is modified during Compiler initialization.
 const Symbol *const LoopSymbol = &_LoopSymbol;
 const Symbol *const quoteSymbol = &_quoteSymbol;
 
@@ -65,8 +67,6 @@ const Symbol _AmpSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, E
 const Symbol *const AmpSymbol = &_AmpSymbol;
 const Symbol _derefSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "deref"};
 const Symbol *const derefSymbol = &_derefSymbol;
-const Symbol _DoSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "do"};
-const Symbol *const DoSymbol = &_DoSymbol;
 const Symbol _FNSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "fn*"};
 const Symbol *const FNSymbol = &_FNSymbol;
 const Symbol _inNamespaceSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "inNamespace"};
