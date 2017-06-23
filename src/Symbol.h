@@ -36,6 +36,7 @@ extern const Symbol *const derefSymbol;
 extern const Symbol *const FNSymbol;
 extern const Symbol *const inNamespaceSymbol;
 extern const Symbol *const in_nsSymbol;
+extern const Symbol *const ISEQSymbol;
 extern const Symbol *const loadFileSymbol;
 extern const Symbol *const namespaceSymbol;
 extern const Symbol *const nsSymbol;

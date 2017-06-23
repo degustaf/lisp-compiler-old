@@ -11,6 +11,7 @@
 #define GENERATE_STRING(ENUM) #ENUM,
 
 #define FOREACH_TYPE(TYPE) \
+	TYPE(LISPOBJECT_type) \
 	TYPE(EOF_type) \
 	TYPE(ERROR_type) \
     TYPE(DONE_type) \
@@ -31,6 +32,7 @@
 	TYPE(EXPR_type) \
 	TYPE(PATHNODE_type) \
 	TYPE(OBJMETHOD_type) \
+	TYPE(FNMETHOD_type) \
 	TYPE(BINDINGINIT_type) \
 \
 	/* Map types. */ \
@@ -42,10 +44,13 @@
 	TYPE(HASHMAP_type) \
 	TYPE(TRANSIENTHASHMAP_type) \
 \
-	/* Vector types. */\
+	/* Vector types. */ \
 	TYPE(VECTOR_type) \
 	TYPE(NODE_type) \
-	TYPE(CHUNKEDSEQ_type)
+	TYPE(CHUNKEDSEQ_type)\
+\
+	/* Interfaces. */ \
+	TYPE(ISEQ_interface)
 
 
 typedef enum {

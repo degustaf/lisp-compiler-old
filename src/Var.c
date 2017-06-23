@@ -208,9 +208,14 @@ void setMacro(Var *v) {
 }
 
 void setVar(Var *v, const lisp_object *val) {
+	printf("In setVar\n");
 	Validate(v->validator, val);
 	const IMap *m = dval->bindings;
 	dval = NewFrame(m->obj.fns->IMapFns->assoc(m, (lisp_object*)v, val), dval->prev);
+	printf("dval = %p\n", (void*)dval);
+	if(dval)
+		printf("dval->bindings = %p\n", (void*)dval->bindings);
+	fflush(stdout);
 }
 
 bool isMacroVar(Var *v) {
@@ -232,7 +237,22 @@ bool isDynamic(const Var *v) {
 }
 
 bool isBound(const Var *v) {
+	printf("In isBound.\n");
+	printf("TopFrame = %p\n", (void*)TopFrame);
+	printf("v = %p\n", (void*)v);
+	printf("dval = %p\n", (void*)dval);
+	if(dval)
+		printf("dval->bindings = %p\n", (void*)dval->bindings);
+	fflush(stdout);
 	const IMap *bmap = dval->bindings;
+	printf("hasRoot is %d\n", hasRoot(v));
+	printf("v->threadBound = %p\n", (void*)v->threadBound);
+	printf("bmap->obj = %p\n", (void*)&(bmap->obj));
+	printf("bmap->obj.fns = %p\n", (void*)bmap->obj.fns);
+	printf("bmap->obj.type = %d\n", bmap->obj.type);
+	fflush(stdout);
+	printf("bmap->obj.type = %s\n", object_type_string[bmap->obj.type]);
+	fflush(stdout);
 	return hasRoot(v) || (v->threadBound && bmap->obj.fns->IMapFns->entryAt(bmap, (lisp_object*)v));
 }
 
@@ -260,8 +280,13 @@ const Symbol *getSymbolVar(const Var *v) {
 }
 
 void pushThreadBindings(const IMap *bindings) {
+	printf("In pushThreadBindings.\n");
 	const Frame *f = dval;
 	const IMap *bmap = dval->bindings;
+	printf("bmap = %p\n", (void*)bmap);
+	if(bmap)
+		printf("bmap->type = %d\n", bmap->obj.type);
+	fflush(stdout);
 	for(const ISeq *s = bindings->obj.fns->SeqableFns->seq((const Seqable*)bindings); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
 		const MapEntry *e = (const MapEntry*)s->obj.fns->ISeqFns->first(s);
 		Var *v = (Var*)e->key;
@@ -271,17 +296,33 @@ void pushThreadBindings(const IMap *bindings) {
 		Validate(v->validator, e->val);
 		v->threadBound = true;
 		bmap = bmap->obj.fns->IMapFns->assoc(bmap, (const lisp_object*)v, e->val);
+		printf("bmap = %p\n", (void*)bmap);
+		if(bmap)
+			printf("bmap->type = %d\n", bmap->obj.type);
+		fflush(stdout);
 	}
 	dval = NewFrame(bmap, f);
+	printf("dval = %p\n", (void*)dval);
+	printf("dval->bindings = %p\n", (void*)dval->bindings);
+	fflush(stdout);
 }
 
 void popThreadBindings(void) {
+	printf("In popThreadBindings\n");
+	printf("dval = %p\n", (void*)dval);
+	if(dval)
+		printf("dval->bindings = %p\n", (void*)dval->bindings);
+	fflush(stdout);
 	const Frame *f = dval->prev;
 	if(f == NULL) {
 		exception e = {IllegalStateException, "Pop without matching push"};
 		Raise(e);
 	}
 	dval = f;
+	printf("dval = %p\n", (void*)dval);
+	if(dval)
+		printf("dval->bindings = %p\n", (void*)dval->bindings);
+	fflush(stdout);
 }
 
 static bool hasRoot(const Var *v) {

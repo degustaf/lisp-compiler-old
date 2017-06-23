@@ -67,6 +67,7 @@ typedef enum {	// expr_type
 	VECTOREXPR_type,
 	DEFEXPR_type,
 	BODYEXPR_type,
+	METHODPARAMEXPR_type,
 } expr_type;
 
 #define EXPR_BASE \
@@ -94,6 +95,10 @@ static bool IsLiteralExpr(const Expr *e);
 static const Expr* NewStringExpr(const String *form);
 static const Expr* NewEmptyExpr(const ICollection *form);
 static const Symbol* tagOf(const lisp_object *o);
+static object_type tagType(const lisp_object *tag);
+static object_type tagToClass(const lisp_object *tag);
+static object_type maybeClass(const lisp_object *form, bool stringOK);
+static object_type maybeSpecialTag(const Symbol *sym);
 static bool inTailCall(Expr_Context C);
 static const char* munge(const char *name);
 static const char* demunge(const char *mungedName);
@@ -101,6 +106,8 @@ static const object_type* maybePrimitiveType(const Expr *e);
 static const lisp_object* resolveIn(Namespace *ns, const Symbol *sym, bool allowPrivate);
 static Var* LookupVar(const Symbol *sym, bool InternNew, bool RegisterMacro);
 static void registerVar(const Var *v);
+static const Expr* parseBodyExpr(Expr_Context context, const lisp_object *form);
+static object_type primClass(const Symbol *sym);
 
 // PathNode
 typedef struct PathNode_struct {
@@ -142,24 +149,27 @@ static const PathNode* commonPath(const PathNode *n1, const PathNode *n2) {
 
 typedef struct ObjExpr_struct ObjExpr;
 
+#define OBJMETHOD_DEF \
+	lisp_object obj; \
+	struct ObjMethod_struct *parent; \
+	const IMap *locals; \
+	const IMap *indexLocals; \
+	const Expr *body; \
+	ObjExpr *objx; \
+	const IVector *argLocals; \
+	size_t maxLocal; \
+	size_t line; \
+	size_t column; \
+	bool useThis; \
+	const IMap /* TODO ISet */ *localsUsedInCatchFinally; \
+	const IMap *methodMeta;
+
 // ObjMethod
 typedef struct ObjMethod_struct { // ObjMethod
-	lisp_object obj;
-	struct ObjMethod_struct *parent;
-	const IMap *locals;
-	const IMap *indexLocals;
-	const Expr *body;
-	ObjExpr *objx;
-	const IVector argLocals;
-	size_t maxLocal;
-	size_t line;
-	size_t column;
-	bool useThis;
-	const IMap /* TODO ISet */ *localsUsedInCatchFinally;
-	const IMap *methodMeta;
+	OBJMETHOD_DEF
 } ObjMethod;
 
-const ObjMethod* NewObjMethod(ObjExpr *objx, ObjMethod *parent) {
+static ObjMethod* NewObjMethod(ObjExpr *objx, ObjMethod *parent) {
 	ObjMethod *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = OBJMETHOD_type;
 	ret->obj.fns = &NullInterface;
@@ -170,36 +180,39 @@ const ObjMethod* NewObjMethod(ObjExpr *objx, ObjMethod *parent) {
 	return ret;
 }
 
+#define OBJEXPR_DEF \
+	EXPR_BASE \
+	const char *name; \
+	const char *internalName; \
+	const char *thisName; \
+	/* Type objType; */ \
+	const lisp_object *tag; \
+	const IMap *closes; \
+	const IMap *closesExpr; \
+	const IMap *volatiles; \
+	const IMap *fields; \
+	const IVector *hintedFields; \
+	const IMap *keywords; \
+	const IMap *vars; \
+	/* Class compiledClass; */ \
+	/* int line; */ \
+	/* int column; */ \
+	const IVector *constants; \
+	const IMap /* TODO ISet */ *usedConstants; \
+	int constantsID; \
+	int altCtorDrops; \
+	const IVector *keywordCallsites; \
+	const IVector *protocolCallsites; \
+	const IMap /* TODO ISet */ *varCallsites; \
+	bool onceOnly; \
+	const lisp_object *src; \
+	const IMap *opts; \
+	const IMap *classMeta; \
+	bool canBeDirect;
+
 // ObjExpr
 struct ObjExpr_struct {
-	EXPR_BASE
-	const char *name;
-	const char *internalName;
-	const char *thisName;
-	// Type objType;
-	const lisp_object *tag;
-	const IMap *closes;
-	const IMap *closesExpr;
-	const IMap *volatiles;
-	const IMap *fields;
-	const IVector *hintedFields;
-	const IMap *keywords;
-	const IMap *vars;
-	// Class compiledClass;
-	// int line;
-	// int column;
-	const IVector *constants;
-	const IMap /* TODO ISet */ *usedConstants;
-	int constantsID;
-	int altCtorDrops;
-	const IVector *keywordCallsites;
-	const IVector *protocolCallsites;
-	const IMap /* TODO ISet */ *varCallsites;
-	bool onceOnly;
-	const lisp_object *src;
-	const IMap *opts;
-	const IMap *classMeta;
-	bool canBeDirect;
+	OBJEXPR_DEF
 };
 
 const ObjExpr* NewObjExpr(const lisp_object *tag) {
@@ -237,7 +250,7 @@ typedef struct {	// LocalBinding
 	bool used;
 } LocalBinding;
 
-__attribute__((unused)) static LocalBinding* NewLocalBinding(int num, const Symbol *sym, const Symbol *tag, const Expr *init, bool isArg, const PathNode *clearPathRoot) {
+static LocalBinding* NewLocalBinding(int num, const Symbol *sym, const Symbol *tag, const Expr *init, bool isArg, const PathNode *clearPathRoot) {
 	LocalBinding *ret = GC_MALLOC(sizeof(*ret));
 	if(maybePrimitiveType(init) && tag) {
 		exception e = {UnsupportedOperationException, "Can't type hint a local with a primitive initializer"};
@@ -280,9 +293,15 @@ static void closeOver(const LocalBinding *b, ObjMethod *method) {
 }
 
 static LocalBinding* referenceLocal(const Symbol *sym) {
+	printf("In referenceLocal.\n");
+	fflush(stdout);
 	if(!isBound(LOCAL_ENV))
 		return NULL;
+	printf("LOCAL_ENV is not bound.\n");
+	fflush(stdout);
 	LocalBinding *b = (LocalBinding*) get(deref(LOCAL_ENV), (lisp_object*)sym, NULL);
+	printf("Got b.\n");
+	fflush(stdout);
 
 	if(b) {
 		ObjMethod *method = (ObjMethod*)deref(METHOD);
@@ -315,6 +334,209 @@ static const LocalBinding* registerLocal(const Symbol *sym,  const Symbol *tag, 
 	method->indexLocals = (IMap*)assoc((lisp_object*)method->indexLocals, (lisp_object*)NewInteger(num), (lisp_object*)b);
 
 	return b;
+}
+
+// MethodParamExpr
+typedef struct {	// MethodParamExpr
+	EXPR_BASE
+	object_type class;
+} MethodParamExpr;
+
+const lisp_object* EvalMethodParamExpr(__attribute__((unused)) const Expr *self) {
+	exception e = {RuntimeException, "Can't eval."};
+	Raise(e);
+	__builtin_unreachable();
+}
+
+const MethodParamExpr* NewMethodParamExpr(object_type c) {
+	MethodParamExpr *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = EXPR_type;
+	ret->obj.fns = &NullInterface;
+	ret->type = METHODPARAMEXPR_type;
+	ret->Eval = EvalMethodParamExpr;
+
+	ret->class = c;
+	return ret;
+}
+
+typedef enum {REQ, REST, DONE} PSTATE;
+
+// FnMethod
+typedef struct {	// FnMethod
+	OBJMETHOD_DEF
+	const IVector *reqParms;
+	const LocalBinding *restParm;
+	object_type *argTypes;
+	size_t argTypesCount;
+	// Class argClasses[];
+	// Class retClass;
+	const char *prim;
+} FnMethod;
+
+static FnMethod* NewFnMethod(ObjExpr *objx, ObjMethod *parent) {
+	FnMethod *ret = (FnMethod*)NewObjMethod(objx, parent);
+	ret = GC_realloc(ret, sizeof(*ret));
+	ret->obj.type = FNMETHOD_type;
+	ret->reqParms = (IVector*)EmptyVector;
+	ret->restParm = NULL;
+ 
+	return ret;
+}
+
+static char classChar(const lisp_object *x) {
+	object_type c = ERROR_type;
+	if(x->type == SYMBOL_type)
+		c = primClass((Symbol*)x);
+	if(c == ERROR_type || !isPrimitive(c))
+		return 'O';
+	if(c == INTEGER_type)
+		return 'L';
+	if(c == FLOAT_type)
+		return 'D';
+	exception e = {IllegalArgumentException, "Only long and double primitives are supported"};
+	Raise(e);
+}
+
+static const char* primInterface(__attribute__((unused)) const IVector *arglist) {
+	StringWriter *sw = NewStringWriter();
+	for(size_t i = 0; i< arglist->obj.fns->ICollectionFns->count((ICollection*)arglist); i++)
+		AddChar(sw, classChar((lisp_object*)tagOf(arglist->obj.fns->IVectorFns->nth(arglist, i, NULL))));
+	AddChar(sw, classChar((lisp_object*)tagOf((lisp_object*)arglist)));
+	const char *ret = WriteString(sw);
+	// TODO primInterface
+	return NULL;
+}
+
+static object_type primClassType(object_type c) {
+	return isPrimitive(c) ? c: LISPOBJECT_type;
+}
+
+static const FnMethod* parseFnMethod(ObjExpr *objx, const ISeq *form, const lisp_object *rettag) {
+	const IVector *parms = (IVector*)first((lisp_object*)form);
+	const ISeq* body = next((lisp_object*)form);
+	FnMethod *method = NULL;
+	TRY
+		method = NewFnMethod(objx, (ObjMethod*)deref(METHOD));
+		// method->line = lineDeref();	// TODO
+		// method->column = columnDeref();	// TODO
+		const PathNode *pnode = (PathNode*)getVar(CLEAR_PATH);
+		if(pnode == NULL)
+			pnode = NewPathNode(PATH, NULL);
+		const lisp_object* mapArgs[] = {
+			(lisp_object*)METHOD, (lisp_object*)method,
+			(lisp_object*)LOCAL_ENV, deref(LOCAL_ENV),
+			(lisp_object*)LOOP_LOCALS, NULL,
+			(lisp_object*)NEXT_LOCAL_NUM, (lisp_object*)NewInteger(0),
+			(lisp_object*)CLEAR_PATH, (lisp_object*)pnode,
+			(lisp_object*)CLEAR_ROOT, (lisp_object*)pnode,
+			(lisp_object*)CLEAR_SITES, (lisp_object*)EmptyHashMap,
+			(lisp_object*)METHOD_RETURN_CONTEXT, (lisp_object*)True,
+		};
+		size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
+		pushThreadBindings((IMap*)CreateHashMap(mapArgc, mapArgs));
+
+		method->prim = primInterface(parms);
+		if(method->prim) {
+			// TODO replace '.' to '/' in method->prim
+		}
+
+		if(rettag->type == STRING_type)
+			rettag = (lisp_object*)internSymbol2(NULL, toString(rettag));
+		if(rettag->type != SYMBOL_type)
+			rettag = NULL;
+		if(rettag) {
+			// TODO Handle primative return type.
+		} // else {
+			// method->retClass = LispObject;
+		// }
+
+		if(objx->thisName) {
+			registerLocal(internSymbol1(objx->thisName), NULL, NULL, false);
+		} else {
+			getAndIncLocalNum();
+		}
+
+		PSTATE state = REQ;
+		const IVector *argLocals = (IVector*) EmptyVector;
+		size_t argTypesCount = 0;
+		object_type *argTypes = GC_MALLOC_ATOMIC(argTypesCount);
+		// TODO argClass
+		for(size_t i = 0; i < count((lisp_object*)parms); i++) {
+			if(parms->obj.fns->IVectorFns->nth(parms, i, NULL)->type != SYMBOL_type) {
+				exception e = {IllegalArgumentException, "fn params must be symbols."};
+				Raise(e);
+			}
+			const Symbol *p = (Symbol*)parms->obj.fns->IVectorFns->nth(parms, i, NULL);
+			if(getNamespaceSymbol(p)) {
+				exception e = {RuntimeException, WriteString(AddString(AddString(NewStringWriter(), "Can't use qualified name as parameter: "), toString((lisp_object*)p)))};
+				Raise(e);
+			}
+			if(Equals((lisp_object*)p, (lisp_object*)AmpSymbol)) {
+				if(state == REQ) {
+					state = REST;
+				} else {
+					exception e = {RuntimeException, "Invalid parameter list."};
+					Raise(e);
+				}
+			} else {
+				object_type pc = primClassType(tagType((lisp_object*)tagOf((lisp_object*)p)));
+				if(isPrimitive(pc) && !(pc == INTEGER_type || pc == FLOAT_type)) {
+					exception e = {IllegalArgumentException, WriteString(AddString(AddString(NewStringWriter(), "Only long and double primitives are supported: "),
+								toString((lisp_object*)p)))};
+					Raise(e);
+				}
+				if(state == REST && tagOf((lisp_object*)p)) {
+					exception e = {RuntimeException, "& arg cannot have type hint"};
+					Raise(e);
+				}
+				if(state == REST && method->prim) {
+					exception e = {RuntimeException, "fns taking primitives cannot be variadic"};
+					Raise(e);
+				}
+				if(state == REST)
+				pc = ISEQ_interface;
+				argTypesCount++;
+				GC_realloc(argTypes, argTypesCount);
+				argTypes[argTypesCount-1] = pc;
+				const LocalBinding *lb = isPrimitive(pc) ? registerLocal(p, NULL, (Expr*)NewMethodParamExpr(pc), true)
+														: registerLocal(p, state == REST ? ISEQSymbol : tagOf((lisp_object*)p), NULL, true);
+				argLocals = argLocals->obj.fns->IVectorFns->cons(argLocals, (lisp_object*)lb);
+				switch(state) {
+					case REQ:
+						method->reqParms = method->reqParms->obj.fns->IVectorFns->cons(method->reqParms, (lisp_object*)lb);
+						break;
+					case REST:
+						method->restParm = lb;
+						state = DONE;
+						break;
+					default: {
+						exception e = {RuntimeException, "Unexpected parameter."};
+						Raise(e);
+						break;
+					}
+				}
+			}
+		}
+
+		if(count((lisp_object*)method->reqParms) > MAX_POSITIONAL_ARITY) {
+			exception e = {RuntimeException, WriteString(AddString(AddInt(AddString(NewStringWriter(), "Can't specify more than "), MAX_POSITIONAL_ARITY), " params"))};
+			Raise(e);
+		}
+		setVar(LOOP_LOCALS, (lisp_object*)argLocals);
+		method->argLocals = argLocals;
+		method->argTypes = argTypes;
+		method->argTypesCount = argTypesCount;
+		if(method->prim) {
+			for(size_t i = 0; i < argTypesCount; i++) {
+				if(method->argTypes[i] == INTEGER_type || method->argTypes[i] == FLOAT_type)
+					getAndIncLocalNum();
+			}
+		}
+		method->body = parseBodyExpr(RETURN, (lisp_object*)body);
+	FINALLY
+		popThreadBindings();
+	ENDTRY
+	return method;
 }
 
 // BindingInit
@@ -1201,6 +1423,11 @@ static const Expr* parseLetExpr(Expr_Context context, const lisp_object *form) {
 	}
 }
 
+// FnExpr
+typedef struct {	// FnExpr
+	OBJEXPR_DEF	
+} FnExpr;
+
 // IParser
 typedef const Expr* (*IParser)(Expr_Context context, const lisp_object *form);
 typedef struct {	// Special
@@ -1233,15 +1460,23 @@ const Special specials[] = {
 };
 const size_t special_count = sizeof(specials)/sizeof(specials[0]);
 IParser isSpecial(const lisp_object *sym) {
+	printf("In isSpecial.\n");
+	fflush(stdout);
 	if(sym == NULL)
 		return NULL;
+	printf("sym is not NULL.\n");
+	printf("sym->type = %s\n", object_type_string[sym->type]);
+	fflush(stdout);
 	if(sym->type != SYMBOL_type)
 		return NULL;
 	bool (*Equals)(const struct lisp_object_struct *x, const struct lisp_object_struct *y) = ((lisp_object*)sym)->Equals;
 	for(size_t i =0; i<special_count; i++) {
-		if(Equals((lisp_object*)sym, (lisp_object*)specials[i].sym))
+		if(Equals((lisp_object*)sym, (lisp_object*)specials[i].sym)) {
 			return specials[i].parse;
+		}
 	}
+	printf("sym is not a special.\n");
+	fflush(stdout);
 	return NULL;
 }
 
@@ -1307,8 +1542,12 @@ static void registerVar(const Var *v) {
 }
 
 static Var* LookupVar(const Symbol *sym, bool InternNew, bool RegisterMacro) {
+	printf("In Lookup Var.\n");
+	printf("sym = %s\n", toString((lisp_object*)sym));
 	Var *ret = NULL;
 	if(getNamespaceSymbol(sym)) {
+		printf("sym.ns is not NULL.\n");
+		fflush(stdout);
 		Namespace *ns = namespaceFor(CurrentNS(), sym);
 		if(ns == NULL)
 			return NULL;
@@ -1319,13 +1558,24 @@ static Var* LookupVar(const Symbol *sym, bool InternNew, bool RegisterMacro) {
 			ret = findInternedVar(ns, name);
 		}
 	}
-	else if(((lisp_object*)sym)->Equals((lisp_object*)sym, (lisp_object*)namespaceSymbol)) {
+	else if(((lisp_object*)sym)->Equals((lisp_object*)sym, (lisp_object*)nsSymbol)) {
 		ret = NS_Var;
 	}
 	else if(((lisp_object*)sym)->Equals((lisp_object*)sym, (lisp_object*)inNamespaceSymbol)) {
 		ret = IN_NS_Var;
 	}
 	else {
+		const lisp_object *o = getMapping(CurrentNS(), sym);
+		if(o == NULL) {
+			if(InternNew)
+				ret = internNS(CurrentNS(), internSymbol1(getNameSymbol(sym)));
+		}else if(o->type == VAR_type) {
+			ret = (Var*)o;
+		} else {
+			exception e = {RuntimeException, WriteString(AddString(AddString(AddString(AddString(NewStringWriter(), "Expecting var, but "),
+								toString((lisp_object*)sym)), " is mapped to "), toString(o)))};
+			Raise(e);
+		}
 	}
 
 	if(ret && (isMacroVar(ret) || RegisterMacro))
@@ -1334,10 +1584,19 @@ static Var* LookupVar(const Symbol *sym, bool InternNew, bool RegisterMacro) {
 }
 
 static Var* isMacro(const lisp_object *obj) {
+	printf("In isMacro\n");
+	printf("obj = %s\n", toString(obj));
+	fflush(stdout);
 	Var *ret = NULL;
 	switch(obj->type) {
 		case SYMBOL_type:
+			printf("obj is a symbol.\n");
+			fflush(stdout);
 			ret = LookupVar((Symbol*)obj, false, false);
+			printf("ret = %p\n", (void*)ret);
+			if(ret)
+				printf("ret = %s\n", toString((lisp_object*)ret));
+			fflush(stdout);
 			break;
 		case VAR_type:
 			ret = (Var*)obj;
@@ -1356,14 +1615,28 @@ static Var* isMacro(const lisp_object *obj) {
 }
 
 static const lisp_object* macroExpand1(const lisp_object *x) {
+	printf("In macroExpand1.\n");
+	printf("x = %p\n", (void*)x);
+	if(x)
+		printf("x = %s\n", object_type_string[x->type]);
+	printf("x = %s\n", toString(x));
+	fflush(stdout);
 	if(!isISeq(x))
 		return x;
+	printf("x is ISeq.\n");
+	fflush(stdout);
 	const ISeq *form = (ISeq*)x;
 	const lisp_object *op = form->obj.fns->ISeqFns->first(form);
+	printf("op = %s\n", toString(op));
+	fflush(stdout);
 	if(isSpecial(op)) {
 		return x;
 	}
+	printf("op is not special.\n");
+	fflush(stdout);
 	const Var *v = isMacro(op);
+	printf("v = %p\n", (void*)v);
+	fflush(stdout);
 	if(v) {
 		const ISeq *args = form->obj.fns->ISeqFns->next(form);
 		args = cons(getVar(LOCAL_ENV), (lisp_object*)args);
@@ -1427,14 +1700,17 @@ static const Expr* analyzeSymbol(const Symbol *sym) {
 	if(tag)
 		printf("tag = %s\n", toString((lisp_object*)tag));
 	fflush(stdout);
-	if(getNamespaceSymbol(sym) == NULL) {
+	if(ns == NULL) {
+		printf("ns is NULL\n");
+		fflush(stdout);
 		LocalBinding *b = referenceLocal(sym);
 		printf("b = %p\n", (void*) b);
 		fflush(stdout);
 		if(b)
 			return NewLocalBindingExpr(b, tag);
 	} else if(namespaceFor(CurrentNS(), sym) == NULL) {
-		__attribute__((unused)) const Symbol *nsSym = internSymbol1(getNamespaceSymbol(sym));
+		printf("namespaceFor returned NULL.\n");
+		__attribute__((unused)) const Symbol *nsSym = internSymbol1(ns);
 		// TODO requires HostExpr.maybeClass and StaticFieldExpr
 	}
 	printf("after if/else clause.\n");
@@ -1540,6 +1816,88 @@ static const Symbol* tagOf(const lisp_object *o) {
 	return NULL;
 }
 
+static object_type primClass(const Symbol *sym) {
+	if(sym == NULL)
+		return ERROR_type;
+	object_type c = ERROR_type;
+	const char *name = getNameSymbol(sym);
+	if(strcmp(name, "int") == 0) {
+		c = INTEGER_type;
+	} else if(strcmp(name, "double") == 0) {
+		c = FLOAT_type;
+	} else if(strcmp(name, "char") == 0) {
+		c = CHAR_type;
+	}
+
+	return c;
+}
+
+static object_type tagType(const lisp_object *tag) {
+	if(tag == NULL)
+		return LISPOBJECT_type;
+	object_type c = ERROR_type;
+	if(tag->type == SYMBOL_type)
+		c = primClass((Symbol*)tag);
+	if(c == ERROR_type)
+	 	c = tagToClass(tag);
+	return c;
+}
+
+static object_type tagToClass(const lisp_object *tag) {
+	object_type c = ERROR_type;
+	if(tag->type == SYMBOL_type) {
+		const Symbol *sym = (Symbol*)tag;
+		if(getNamespaceSymbol(sym))
+			c = maybeSpecialTag(sym);
+	}
+	if(c == ERROR_type)
+		c = maybeClass(tag, true);
+	if(c == ERROR_type) {
+		exception e = {IllegalArgumentException, WriteString(AddString(AddString(NewStringWriter(), "Unable to resolve classname: "), toString(tag)))};
+		Raise(e);
+	}
+	return c;
+}
+
+static object_type maybeClass(const lisp_object *form, bool stringOK) {
+	object_type c = ERROR_type;
+	if(form->type == SYMBOL_type) {
+		const Symbol *sym = (Symbol*)form;
+		if(getNamespaceSymbol(sym) == NULL) {
+			if(Equals((lisp_object*)sym, getVar(COMPILE_STUB_SYM)))
+				return IntegerValue((Integer*)getVar(COMPILE_STUB_CLASS));
+			const char *name = getNameSymbol(sym);
+			if(strchr(name, '.') || name[0] == '[') {
+				// c = classForName(name);	// TODO
+			} else {
+				const lisp_object *o = getMapping(CurrentNS(), sym);
+				if(o->type == INTEGER_type)
+					return IntegerValue((Integer*)o);
+				const IMap *localEnv = (IMap*)deref(LOCAL_ENV);
+				if(localEnv && localEnv->obj.fns->IMapFns->entryAt(localEnv, form)) {
+					return ERROR_type;
+				}
+				TRY
+					// c = classForName(name);	// TODO
+				EXCEPT(ANY)
+				ENDTRY
+			}
+		}
+	}
+	else if(stringOK && form->type == STRING_type) {
+		// c = classForName((String*)form);	// TODO
+	}
+	return c;
+}
+
+static object_type maybeSpecialTag(const Symbol *sym) {
+	object_type c = primClass(sym);
+	if(c != ERROR_type)
+		return c;
+	// TODO array types.
+	return c;
+}
+
 static bool inTailCall(Expr_Context C) {
 	return (C == RETURN) && deref(METHOD_RETURN_CONTEXT) && (deref(IN_CATCH_FINALLY) == NULL);
 }
@@ -1635,6 +1993,7 @@ Namespace* CurrentNS(void) {
 }
 
 const lisp_object* Eval(const lisp_object *form) {
+	printf("In Eval.\n");
 	printf("form = %s\n", toString(form));
 	fflush(stdout);
 	form = macroExpand(form);
@@ -1654,7 +2013,7 @@ const lisp_object* Eval(const lisp_object *form) {
 	return x->Eval(x);
 }
 
-const lisp_object* compilerLoad(FILE *reader, __attribute__((unused)) const char *path, __attribute__((unused)) const char *name) {
+const lisp_object* compilerLoad(FILE *reader, const char *path, const char *name) {
 	const lisp_object *ret = NULL;
 	const lisp_object *mapArgs[] = {
 		(lisp_object*)SOURCE_PATH, (lisp_object*)NewString(path),

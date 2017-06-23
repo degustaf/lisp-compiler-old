@@ -73,6 +73,8 @@ const Symbol _inNamespaceSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol,
 const Symbol *const inNamespaceSymbol = &_inNamespaceSymbol;
 const Symbol _in_nsSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "in-ns"};
 const Symbol *const in_nsSymbol = &_inNamespaceSymbol;
+const Symbol _ISEQSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "ISeq"};
+const Symbol *const ISEQSymbol = &_ISEQSymbol;
 const Symbol _loadFileSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "loadFile"};
 const Symbol *const loadFileSymbol = &_loadFileSymbol;
 const Symbol _namespaceSymbol = {{SYMBOL_type, sizeof(Symbol), toStringSymbol, NULL, EqualSymbol, (IMap*)&_EmptyHashMap, &Symbol_interfaces}, NULL, "namespace"};
@@ -154,8 +156,8 @@ static bool EqualSymbol(const lisp_object *x, const lisp_object *y) {
 		return false;
 	const Symbol *ySym = (Symbol*) y;
 	if(xSym->ns == NULL && ySym->ns == NULL)
-		return strcmp(xSym->name, ySym->name);
+		return !strcmp(xSym->name, ySym->name);
 	if(xSym->ns == NULL || ySym->ns == NULL)
 		return false;
-	return strcmp(xSym->ns, ySym->ns) && strcmp(xSym->name, ySym->name);
+	return !strcmp(xSym->ns, ySym->ns) && !strcmp(xSym->name, ySym->name);
 }

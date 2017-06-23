@@ -132,10 +132,14 @@ void initRT(void) {
 }
 
 static const lisp_object *invokeBootNS(const IFn *self, __attribute__((unused)) const lisp_object *__form, __attribute__((unused)) const lisp_object *__env, const lisp_object *arg1) {
+	printf("In invokeBootNS.\n");
+	fflush(stdout);
 	return invokeInNS(self, arg1);
 }
 
 static const lisp_object *invokeInNS(__attribute__((unused)) const IFn *self, const lisp_object *arg1) {
+	printf("In invokeInNS.\n");
+	fflush(stdout);
 	assert(arg1->type == SYMBOL_type);
 	const Symbol *nsName = (Symbol*)arg1;
 	Namespace *ns = findOrCreateNS(nsName);
@@ -144,6 +148,8 @@ static const lisp_object *invokeInNS(__attribute__((unused)) const IFn *self, co
 }
 
 static const lisp_object *invokeLoadFile(__attribute__((unused)) const IFn *self, __attribute__((unused)) const lisp_object *arg1) {
+	printf("In invokeLoadFile.\n");
+	fflush(stdout);
 	return NULL;	// TODO requires compiler.loadFile
 }
 

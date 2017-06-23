@@ -71,6 +71,7 @@ struct ISeq_vtable_struct {
 	const ISeq* (*cons)(const ISeq*, const lisp_object*);
 };
 
+#define MAX_POSITIONAL_ARITY 5
 struct IFn_vtable_struct {
 	const lisp_object* (*invoke0)(const IFn*);
 	const lisp_object* (*invoke1)(const IFn*, const lisp_object*);
@@ -170,6 +171,10 @@ static inline bool isIMap(const lisp_object *obj) {
 		assert(isICollection(obj));
 	}
 	return ret;
+}
+
+static inline bool isPrimitive(const object_type t) {
+	return t == INTEGER_type || t == FLOAT_type || t == CHAR_type;
 }
 
 #endif /* INTERFACES_H */
