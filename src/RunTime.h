@@ -14,4 +14,6 @@ extern Var *IN_NS_Var;
 const Var* RTVar(const char *ns, const char *name);
 void initRT(void);
 
+int nextID(void);
+
 #endif /* RUNTIME_H */

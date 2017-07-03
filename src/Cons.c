@@ -20,18 +20,18 @@ static const ISeq* nextCons(const ISeq*);
 static const ISeq* moreCons(const ISeq*);
 static size_t countCons(const ICollection*);
 
-Seqable_vtable Cons_Seqable_vtable = {
+const Seqable_vtable Cons_Seqable_vtable = {
 	seqASeq,	//seq
 };
 
-ICollection_vtable Cons_ICollection_vtable = {
+const ICollection_vtable Cons_ICollection_vtable = {
 	countCons,					// count
 	(ICollectionFn1)consASeq,	// cons
 	emptyASeq,					// empty
 	EquivASeq					// Equiv
 };
 
-ISeq_vtable Cons_ISeq_vtable = {
+const ISeq_vtable Cons_ISeq_vtable = {
 	firstCons,	// first
 	nextCons,	// next
 	moreCons,	// more
@@ -55,8 +55,7 @@ const Cons *NewCons(const lisp_object *obj, const ISeq *s) {
 	ret->obj.type = CONS_type;
 	ret->obj.size = sizeof(Cons);
 	ret->obj.toString = toString;
-	ret->obj.copy = NULL;	// TODO copyCons
-	ret->obj.Equals = NULL;	// TODO EqualsCons
+	ret->obj.Equals = EqualsASeq;
 	ret->obj.meta = NULL;	// TODO meta for Cons
 	ret->obj.fns = &Cons_interfaces;
 	ret->_first = obj;

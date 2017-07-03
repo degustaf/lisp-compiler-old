@@ -11,14 +11,13 @@
 static const char *toStringEmptyList(const lisp_object *obj);
 static const lisp_object* firstList(const ISeq*);
 static const ISeq* nextList(const ISeq*);
-static const lisp_object *ListCopy(const lisp_object *obj);
 static size_t countList(const ICollection *ic);
 
-Seqable_vtable List_Seqable_vtable = {
+const Seqable_vtable List_Seqable_vtable = {
 	seqASeq // seq
 };
 
-ICollection_vtable List_ICollection_vtable = {
+const ICollection_vtable List_ICollection_vtable = {
 	countList,					// count
 	(ICollectionFn1)consASeq,	// cons
 	emptyASeq,					// empty
@@ -50,7 +49,7 @@ struct List_struct {
     const size_t _count;
 };
     
-const List _EmptyList = {{LIST_type, sizeof(List), toStringEmptyList, ListCopy, EqualBase, NULL, &List_interfaces}, NULL, NULL, 0};
+const List _EmptyList = {{LIST_type, sizeof(List), toStringEmptyList, EqualBase, NULL, &List_interfaces}, NULL, NULL, 0};
 const List *const EmptyList = &_EmptyList;
 
 static const char *toStringEmptyList(const lisp_object *obj) {
@@ -58,23 +57,10 @@ static const char *toStringEmptyList(const lisp_object *obj) {
 	return "()";
 }
 
-static const lisp_object *ListCopy(const lisp_object *obj) {
-    assert(obj->type == LIST_type);
-    List *list = (List*)obj;
-    size_t count = list->_count;
-    const lisp_object **arr = GC_MALLOC(count * sizeof(*arr));
-    for(size_t i=0; i<count; i++) {
-        const lisp_object *const o = list->_first;
-        list = (List*)list->_rest;
-        arr[i] = (*(o->copy))((lisp_object*)o);
-    }
-    return (lisp_object*)CreateList(count, arr);
-}
-
 const List *NewList(const lisp_object *const first) {
     List *ret = GC_MALLOC(sizeof(*ret));
 
-    List _ret = {{LIST_type, sizeof(List), toString, ListCopy, EqualBase, NULL, &List_interfaces}, first, EmptyList, 1};
+    List _ret = {{LIST_type, sizeof(List), toString, EqualBase, NULL, &List_interfaces}, first, EmptyList, 1};
     memcpy(ret, &_ret, sizeof(*ret));
 
     return ret;
@@ -83,7 +69,7 @@ const List *NewList(const lisp_object *const first) {
 const List *CreateList(size_t count, const lisp_object **entries) {
     List *ret = (List*)EmptyList;
     for(size_t i = 1; i <= count; i++) {
-        List _ret = {{LIST_type, sizeof(List), toString, ListCopy, EqualBase, NULL, &List_interfaces},
+        List _ret = {{LIST_type, sizeof(List), toString, EqualBase, NULL, &List_interfaces},
                      entries[count-i],
                      ret,
                      i};

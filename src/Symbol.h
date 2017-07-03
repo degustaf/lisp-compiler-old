@@ -12,6 +12,7 @@ const char *getNameSymbol(const Symbol *s);
 const char *getNamespaceSymbol(const Symbol *s);
 
 extern const Symbol _arglistsSymbol;
+extern const Symbol _ColumnSymbol;
 extern const Symbol _ConstSymbol;
 extern const Symbol _DefSymbol;
 extern const Symbol _DoSymbol;
@@ -19,10 +20,13 @@ extern const Symbol _DocSymbol;
 extern const Symbol _DynamicSymbol;
 extern const Symbol _FileSymbol;
 extern const Symbol _FnOnceSymbol;
+extern const Symbol _IfSymbol;
 extern const Symbol _LetSymbol;
+extern const Symbol _LineSymbol;
 extern const Symbol _LoopSymbol;
 extern const Symbol _macroSymbol;
 extern const Symbol _privateSymbol;
+extern const Symbol _RecurSymbol;
 extern const Symbol _quoteSymbol;
 extern const Symbol _tagSymbol;
 

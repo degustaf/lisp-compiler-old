@@ -6,7 +6,6 @@
 
 #include "Interfaces.h"
 #include "LispObject.h"
-#include "StringWriter.h"
 
 #define HASH_MIXER 0x9e3779b9
 
@@ -17,6 +16,7 @@ bool Equiv(const lisp_object *x, const lisp_object *y);
 uint32_t HashEq(const lisp_object *x);
 uint32_t hashCombine(uint32_t x, uint32_t y);
 const char *toString(const lisp_object *obj);
+const lisp_object* copy(const lisp_object *obj);
 const lisp_object *get(const lisp_object *coll, const lisp_object *key, const lisp_object *NotFound);
 const ISeq *seq(const lisp_object *obj);
 const lisp_object *first(const lisp_object *x);
@@ -35,5 +35,8 @@ const ISeq* listStar2(const lisp_object *arg1, const lisp_object *arg2, const IS
 const ISeq* listStar3(const lisp_object *arg1, const lisp_object *arg2, const lisp_object *arg3, const ISeq *rest);
 const ISeq* listStar4(const lisp_object *arg1, const lisp_object *arg2, const lisp_object *arg3, const lisp_object *arg4, const ISeq *rest);
 const ISeq* listStar5(const lisp_object *arg1, const lisp_object *arg2, const lisp_object *arg3, const lisp_object *arg4, const lisp_object *arg5, const ISeq *rest);
+const char* replace(const char *str, const char *orig, const char *rep);
+const ISeq* keys(const lisp_object *coll);
+const ISeq* vals(const lisp_object *coll);
 
 #endif /* LISP_UTIL_H */

@@ -16,12 +16,6 @@ static const char *CharToString(const lisp_object *obj) {
     return ch->val;
 }
 
-static const lisp_object *CharCopy(const lisp_object *obj) {
-    assert(obj->type == CHAR_type);
-    Char *ch = (Char*)obj;
-    return (lisp_object*)NewChar(ch->val[0]);
-}
-
 Char *NewChar(char ch) {
     Char *ret = GC_MALLOC(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
@@ -29,7 +23,6 @@ Char *NewChar(char ch) {
     ret->obj.type = CHAR_type;
     // ret->obj.codegen = Char_codegen;
     ret->obj.toString = CharToString;
-    ret->obj.copy = CharCopy;
 	ret->obj.fns = &NullInterface;
 
     ret->val[0] = ch;
@@ -49,19 +42,12 @@ static const char *StringToString(const lisp_object *obj) {
     return str->str;
 }
 
-static const lisp_object *StringCopy(const lisp_object *obj) {
-    assert(obj->type == STRING_type);
-    String *str = (String*)obj;
-    return (lisp_object*)NewString(str->str);
-}
-
 String *NewString(const char *str) {
     String *ret = GC_MALLOC(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = STRING_type;
     ret->obj.toString = StringToString;
-    ret->obj.copy = StringCopy;
 	ret->obj.fns = &NullInterface;
 
 	size_t len = strlen(str);

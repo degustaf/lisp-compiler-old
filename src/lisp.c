@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "LineNumberReader.h"
 #include "Repl.h"
 #include "RunTime.h"
 #include "Symbol.h"
@@ -40,7 +41,7 @@ int main(int argc, char **argv) {
 	__attribute__((unused)) const Var *MAIN = RTVar("lisp.main", "main");
 
 	// ((const IFn*)require)->obj.fns->IFnFns->invoke1((const IFn*)require, (const lisp_object*)MAIN);
-	repl(stdin);
+	repl(LNR_IN);
 
 	return 0;
 }

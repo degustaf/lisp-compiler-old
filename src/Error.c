@@ -40,7 +40,7 @@ void Raise(exception e) {
 	longjmp(cb->jmp, ES_Exception);
 }
 
-void NewArityError(size_t actual, const char *restrict name) {
+const lisp_object* NewArityError(size_t actual, const char *restrict name) {
 	StringWriter *sw = NewStringWriter();
 	AddString(sw, "Wrong number of args (");
 	AddInt(sw, (int)actual);
@@ -49,4 +49,5 @@ void NewArityError(size_t actual, const char *restrict name) {
 	AddChar(sw, '\n');
 	exception e = {ArityException, WriteString(sw)};
 	Raise(e);
+	__builtin_unreachable();
 }

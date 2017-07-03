@@ -23,6 +23,7 @@ typedef enum {	// ExceptionType
 	IllegalAccessError,
 	IllegalArgumentException,
 	IllegalStateException,
+	IndexOutOfBoundException,
 	NumberFormatException,
 	ReaderException,
 	RuntimeException,
@@ -94,6 +95,6 @@ void Raise(exception e);
 		} \
 	}
 
-void NewArityError(size_t actual, const char *restrict name);
+const lisp_object* NewArityError(size_t actual, const char *restrict name);
 
 #endif /* ERROR_H */

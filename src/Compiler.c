@@ -3,17 +3,21 @@
 #include <ctype.h>
 #include <string.h>
 
+#include <stdio.h>
+
 #include "Bool.h"
 #include "Error.h"
 #include "gc.h"
 #include "Interfaces.h"
 #include "Keyword.h"
 #include "List.h"
-#include "Numbers.h"
 #include "Map.h"
+#include "MapEntry.h"
+#include "Numbers.h"
 #include "Reader.h"
 #include "RunTime.h"
 #include "Strings.h"
+#include "StringWriter.h"
 #include "Symbol.h"
 #include "Util.h"
 #include "Vector.h"
@@ -22,6 +26,9 @@ Var *ALLOW_UNRESOLVED_VARS = NULL;
 Var *CLEAR_PATH = NULL;
 Var *CLEAR_ROOT = NULL;
 Var *CLEAR_SITES = NULL;
+Var *COLUMN = NULL;
+Var *COLUMN_AFTER = NULL;
+Var *COLUMN_BEFORE = NULL;
 Var *COMPILER_OPTIONS = NULL;
 Var *COMPILE_STUB_SYM = NULL;
 Var *COMPILE_STUB_CLASS = NULL;
@@ -35,11 +42,17 @@ Var *METHOD = NULL;
 Var *METHOD_RETURN_CONTEXT = NULL;
 Var *NEXT_LOCAL_NUM = NULL;
 Var *NO_RECUR = NULL;
+Var *LINE = NULL;
+Var *LINE_AFTER = NULL;
+Var *LINE_BEFORE = NULL;
 Var *LOCAL_ENV = NULL;
 Var *LOOP_LOCALS = NULL;
+Var *PROTOCOL_CALLSITES = NULL;
 Var *SOURCE = NULL;
 Var *SOURCE_PATH = NULL;
 Var *VARS = NULL;
+Var *VAR_CALLSITES = NULL;
+Var *WARN_ON_REFLECTION = NULL;
 
 typedef enum {	// Expr_Context
 	STATEMENT,
@@ -68,6 +81,10 @@ typedef enum {	// expr_type
 	DEFEXPR_type,
 	BODYEXPR_type,
 	METHODPARAMEXPR_type,
+	FNEXPR_type,
+	IFEXPR_type,
+	RECUREXPR_type,
+	UNRESOLVEDVAREXPR_type,
 } expr_type;
 
 #define EXPR_BASE \
@@ -86,7 +103,7 @@ typedef enum {	// PATHTYPE
 	BRANCH
 } PATHTYPE;
 
-#define EXPR_OBJECT {EXPR_type, 0, NULL, NULL, NULL, NULL, &NullInterface}
+#define EXPR_OBJECT {EXPR_type, 0, NULL, NULL, NULL, &NullInterface}
 
 static int registerConstant(const lisp_object *obj);
 static int registerKeywordCallsite(const Keyword *k);
@@ -108,6 +125,8 @@ static Var* LookupVar(const Symbol *sym, bool InternNew, bool RegisterMacro);
 static void registerVar(const Var *v);
 static const Expr* parseBodyExpr(Expr_Context context, const lisp_object *form);
 static object_type primClass(const Symbol *sym);
+static size_t lineDeref(void);
+static size_t columnDeref(void);
 
 // PathNode
 typedef struct PathNode_struct {
@@ -195,8 +214,8 @@ static ObjMethod* NewObjMethod(ObjExpr *objx, ObjMethod *parent) {
 	const IMap *keywords; \
 	const IMap *vars; \
 	/* Class compiledClass; */ \
-	/* int line; */ \
-	/* int column; */ \
+	int line; \
+	int column; \
 	const IVector *constants; \
 	const IMap /* TODO ISet */ *usedConstants; \
 	int constantsID; \
@@ -234,6 +253,14 @@ const ObjExpr* NewObjExpr(const lisp_object *tag) {
 	ret->opts = (IMap*) EmptyHashMap;
 
 	return ret;
+}
+
+static void CompileObjExpr(__attribute__((unused)) const ObjExpr *self, __attribute__((unused)) const char *superName, __attribute__((unused)) size_t interfaceNames_count, __attribute__((unused)) const char **interfaceNames, __attribute__((unused)) bool oneTimeUse) {
+	// TODO CompileObjExpr
+}
+
+static void /* TODO */ getCompiledClass(__attribute__((unused)) const ObjExpr *self) {
+	// TODO getCompiledClass
 }
 
 // LocalBinding
@@ -395,15 +422,22 @@ static char classChar(const lisp_object *x) {
 		return 'D';
 	exception e = {IllegalArgumentException, "Only long and double primitives are supported"};
 	Raise(e);
+	__builtin_unreachable();
 }
 
-static const char* primInterface(__attribute__((unused)) const IVector *arglist) {
+static const char* primInterface(const IVector *arglist) {
 	StringWriter *sw = NewStringWriter();
 	for(size_t i = 0; i< arglist->obj.fns->ICollectionFns->count((ICollection*)arglist); i++)
 		AddChar(sw, classChar((lisp_object*)tagOf(arglist->obj.fns->IVectorFns->nth(arglist, i, NULL))));
 	AddChar(sw, classChar((lisp_object*)tagOf((lisp_object*)arglist)));
 	const char *ret = WriteString(sw);
-	// TODO primInterface
+	bool prim = strchr(ret, 'L') || strchr(ret, 'D');
+	if(prim && arglist->obj.fns->ICollectionFns->count((ICollection*)arglist)) {
+		exception e = {IllegalArgumentException, "fns taking primitives support only 4 or fewer args"};
+		Raise(e);
+	}
+	if(prim)
+		return WriteString(AddString(AddString(NewStringWriter(), "lisp.IFn$"), ret));
 	return NULL;
 }
 
@@ -417,8 +451,8 @@ static const FnMethod* parseFnMethod(ObjExpr *objx, const ISeq *form, const lisp
 	FnMethod *method = NULL;
 	TRY
 		method = NewFnMethod(objx, (ObjMethod*)deref(METHOD));
-		// method->line = lineDeref();	// TODO
-		// method->column = columnDeref();	// TODO
+		method->line = lineDeref();
+		method->column = columnDeref();
 		const PathNode *pnode = (PathNode*)getVar(CLEAR_PATH);
 		if(pnode == NULL)
 			pnode = NewPathNode(PATH, NULL);
@@ -537,6 +571,10 @@ static const FnMethod* parseFnMethod(ObjExpr *objx, const ISeq *form, const lisp
 		popThreadBindings();
 	ENDTRY
 	return method;
+}
+
+static bool isVariadic(const FnMethod *f) {
+	return f->restParm;
 }
 
 // BindingInit
@@ -878,8 +916,8 @@ typedef struct {	// InvokeExpr
 	const Expr *fexpr;
 	const lisp_object *tag;
 	const IVector *args;
-	// int line;
-	// int column;
+	int line;
+	int column;
 	bool tailPosition;
 	const char *source;
 	bool isProtocol;
@@ -911,7 +949,7 @@ static const lisp_object* EvalInvoke(const Expr *self) {
 
 static const lisp_object* sigTag(size_t argCount, const Var *v) {
 	const IMap *meta = ((lisp_object*)v)->meta;
-	const lisp_object *arglists = meta->obj.fns->IMapFns->entryAt(meta, (lisp_object*)arglistsKW);
+	const lisp_object *arglists = meta->obj.fns->IMapFns->entryAt(meta, (lisp_object*)arglistsKW)->val;
 
 	for(const ISeq *s = seq(arglists); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
 		const Vector *sig = (Vector*)s->obj.fns->ISeqFns->first(s);
@@ -922,7 +960,7 @@ static const lisp_object* sigTag(size_t argCount, const Var *v) {
 	return NULL;
 }
 
-static Expr* NewInvokeExpr(const char *source, /* int line, int column, */ const Symbol *tag, const Expr *fexpr, const IVector *args, bool tailPosition) {
+static Expr* NewInvokeExpr(const char *source, int line, int column, const Symbol *tag, const Expr *fexpr, const IVector *args, bool tailPosition) {
 	InvokeExpr *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = EXPR_type;
 	ret->obj.fns = &NullInterface;
@@ -932,8 +970,8 @@ static Expr* NewInvokeExpr(const char *source, /* int line, int column, */ const
 	ret->source = source;
 	ret->fexpr = fexpr;
 	ret->args = args;
-	// ret->line = line;
-	// ret->column = column;
+	ret->line = line;
+	ret->column = column;
 	ret->tailPosition = tailPosition;
 
 	if(fexpr->type == VAREXPR_type) {
@@ -953,7 +991,7 @@ static Expr* NewInvokeExpr(const char *source, /* int line, int column, */ const
 	return (Expr*)ret;
 }
 
-static Expr* parseInvokeExpr(Expr_Context context, const ISeq *form) {
+static const Expr* parseInvokeExpr(Expr_Context context, const ISeq *form) {
 	bool tailPosition = inTailCall(context);
 	if(context != EVAL)
 		context = EXPRESSION;
@@ -974,13 +1012,16 @@ static Expr* parseInvokeExpr(Expr_Context context, const ISeq *form) {
 	if((fexpr->type == VAREXPR_type) && (context != EVAL)) {
 		const Var *v = ((VarExpr*)fexpr)->v;
 		const IMap *vMeta = ((lisp_object*)v)->meta;
-		const lisp_object *arglist = vMeta->obj.fns->IMapFns->entryAt(vMeta, (lisp_object*)arglistsKW);
+		const lisp_object *arglist = vMeta->obj.fns->IMapFns->entryAt(vMeta, (lisp_object*)arglistsKW)->val;
 		size_t arity = count((lisp_object*)form->obj.fns->ISeqFns->next(form));
 		for(const ISeq *s = seq(arglist); s != NULL; s->obj.fns->ISeqFns->next(s)) {
 			const IVector *args = (IVector*) s->obj.fns->ISeqFns->first(s);
 			if(args->obj.fns->ICollectionFns->count((ICollection*)args) == arity) {
-				__attribute__((unused)) char *primc = NULL;	// TODO requires FnMethod
-				// return Analyze(context, listStar3(internSymbol1(".invokePrim"),
+				if(primInterface(args))
+					return Analyze(context, withMeta((lisp_object*)listStar2((lisp_object*)internSymbol1(".invokePrim"),
+									withMeta(first((lisp_object*)form), NULL), next((lisp_object*)form)),
+								(IMap*)conj_((ICollection*)((lisp_object*)v)->meta, (lisp_object*)form->obj.meta)), NULL);
+
 			}
 		}
 	}
@@ -995,7 +1036,7 @@ static Expr* parseInvokeExpr(Expr_Context context, const ISeq *form) {
 		args = args->obj.fns->IVectorFns->cons(args, (lisp_object*)Analyze(context, s->obj.fns->ISeqFns->first(s), NULL));
 	}
 
-	return NewInvokeExpr(toString(deref(SOURCE)), tagOf((lisp_object*)form), fexpr, args, tailPosition);
+	return NewInvokeExpr(toString(deref(SOURCE)), lineDeref(), columnDeref(), tagOf((lisp_object*)form), fexpr, args, tailPosition);
 }
 
 // LocalBindingExpr
@@ -1213,14 +1254,14 @@ static const Expr* parseDefExpr(Expr_Context context, const lisp_object *form) {
 	if(source_path == NULL)
 		source_path = (lisp_object*) NewString("No_Source_File");
 	mm = (IMap*)assoc((lisp_object*)mm, (lisp_object*)FileKW, source_path);
-	// mm = (IMap*)assoc((lisp_object*)mm, (lisp_object*)LineKW, getVar(LINE));		// TODO
-	// mm = (IMap*)assoc((lisp_object*)mm, (lisp_object*)ColumnKW, getVar(COLUMN));		// TODO
+	mm = (IMap*)assoc((lisp_object*)mm, (lisp_object*)LineKW, getVar(LINE));
+	mm = (IMap*)assoc((lisp_object*)mm, (lisp_object*)ColumnKW, getVar(COLUMN));
 	if(docstring)
 		mm = (IMap*)assoc((lisp_object*)mm, (lisp_object*)DocKW, (lisp_object*)docstring);
 	// mm = elideMeta(mm);	// TODO requires getCompilerOption
 	const Expr *meta = (count((lisp_object*)mm) == 0) ? NULL : Analyze(context == EVAL ? EVAL : EXPRESSION, (lisp_object*)mm, NULL);
 
-	return NewDefExpr(toString(deref(SOURCE)), 0 /* TODO linederef() */, 0 /* TODO columnderef() */, v,
+	return NewDefExpr(toString(deref(SOURCE)), lineDeref(), columnDeref(), v,
 			Analyze(context == EVAL ? EVAL : EXPRESSION, third(form), getNameSymbol(getSymbolVar(v))),
 			meta, count(form) == 3, isDynamic, shadowsCoreMapping);
 }
@@ -1426,7 +1467,353 @@ static const Expr* parseLetExpr(Expr_Context context, const lisp_object *form) {
 // FnExpr
 typedef struct {	// FnExpr
 	OBJEXPR_DEF	
+
+	const FnMethod *variadicMethod;
+	const ICollection *methods;
+	bool hasPrimSigs;
+	bool hasMeta;
+	bool hasEnclosingMethod;
 } FnExpr;
+
+static Expr* NewFnExpr(const lisp_object *tag) {
+	FnExpr *ret = (FnExpr*)NewObjExpr(tag);
+	ret = GC_realloc(ret, sizeof(*ret));
+	ret->type = FNEXPR_type;
+
+	ret->variadicMethod = NULL;
+	return (Expr*) ret;
+}
+
+static const Expr* parseFnExpr(Expr_Context context, const ISeq *form, const char *name) {
+	const ISeq *origForm = form;
+	FnExpr *fn = (FnExpr*)NewFnExpr((lisp_object*)tagOf((lisp_object*)form));
+	const Keyword *retKey = internKeyword2(NULL, "rettag");
+	const lisp_object *rettag = get((lisp_object*)form->obj.meta, (lisp_object*)retKey, NULL);
+	fn->src = (lisp_object*)form;
+	const ObjMethod *enclosingMethod = (ObjMethod*)deref(METHOD);
+	fn->hasEnclosingMethod = enclosingMethod;
+	if(first((lisp_object*)form)->meta) {
+		fn->onceOnly = boolCast(get((lisp_object*)first((lisp_object*)form)->meta, (lisp_object*)internKeyword2(NULL, "once"), NULL));
+	}
+
+	StringWriter *sw = NewStringWriter();
+	if(enclosingMethod) {
+		AddString(sw, enclosingMethod->objx->name);
+	} else {
+		AddString(sw, getNameSymbol(getNameNamespace(CurrentNS())));
+	}
+	AddChar(sw, '$');
+	const char *basename = WriteString(sw);
+
+	const Symbol *nm = NULL;
+	sw = NewStringWriter();
+	if(second((lisp_object*)form)->type == SYMBOL_type) {
+		nm = (Symbol*)second((lisp_object*)form);
+		AddString(sw, getNameSymbol(nm));
+	} else if(name) {
+		AddString(sw, name);
+	} else {
+		AddString(sw, "fn");
+	}
+	AddString(sw, "__");
+	AddInt(sw, nextID());
+	name = WriteString(sw);
+	const char *simpleName = replace(munge(name), ".", "_DOT_");
+
+	fn->name = WriteString(AddString(AddString(NewStringWriter(), basename), simpleName));
+	fn->internalName = replace(fn->name, ".", "/");
+	// fn->objType = // TODO
+
+	size_t prims_count = 0;
+	const char **prims = GC_MALLOC(prims_count * sizeof(*prims));
+	TRY
+		const lisp_object *mapArgs[] = {
+			(lisp_object*)CONSTANTS, (lisp_object*)EmptyVector,
+			(lisp_object*)CONSTANT_IDS, (lisp_object*)EmptyHashMap,
+			(lisp_object*)KEYWORDS, (lisp_object*)EmptyHashMap,
+			(lisp_object*)VARS, (lisp_object*)EmptyHashMap,
+			(lisp_object*)KEYWORD_CALLSITES, (lisp_object*)EmptyVector,
+			(lisp_object*)PROTOCOL_CALLSITES, (lisp_object*)EmptyVector,
+			(lisp_object*)VAR_CALLSITES, (lisp_object*)EmptyHashMap /* EmptyHashSet TODO */,
+			(lisp_object*)NO_RECUR, NULL,
+		};
+		size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
+		pushThreadBindings((IMap*)CreateHashMap(mapArgc, mapArgs));
+
+		if(nm) {
+			fn->thisName = getNameSymbol(nm);
+			form = cons((lisp_object*)FNSymbol, (lisp_object*)next((lisp_object*)next((lisp_object*)form)));
+		}
+		if(isIVector(second((lisp_object*)form))) {
+			form = listStar2((lisp_object*)FNSymbol, (lisp_object*)next((lisp_object*)form), NULL);
+		}
+		fn->line = lineDeref();
+		fn->column = columnDeref();
+		const FnMethod *methodArray[MAX_POSITIONAL_ARITY + 1];
+		memset(&methodArray, sizeof(methodArray), '\0');
+		const FnMethod *VariadicMethod = NULL;
+		bool useThis = false;
+
+		for(const ISeq *s = form->obj.fns->ISeqFns->next(form); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
+			const FnMethod *f = parseFnMethod((ObjExpr*)fn, (ISeq*)s->obj.fns->ISeqFns->first(s), rettag);
+			if(f->useThis)
+				useThis = true;
+			if(isVariadic(f)) {
+				if(VariadicMethod) {
+					exception e = {RuntimeException, "Can't have more than 1 variadic overload"};
+					Raise(e);
+				} else {
+					VariadicMethod = f;
+				}
+			} else if(methodArray[count((lisp_object*)f->reqParms)]) {
+				exception e = {RuntimeException, "Can't have 2 overloads with same arity"};
+				Raise(e);
+			} else {
+				methodArray[count((lisp_object*)f->reqParms)] = f;
+			}
+
+			if(f->prim) {
+				prims_count++;
+				prims = GC_realloc(prims, prims_count * sizeof(*prims));
+				prims[prims_count-1] = f->prim;
+			}
+		}
+
+		if(VariadicMethod) {
+			for(size_t i = count((lisp_object*)VariadicMethod->reqParms) + 1; i < MAX_POSITIONAL_ARITY; i++) {
+				if(methodArray[i]) {
+					exception e = {RuntimeException, "Can't have fixed arity function with more params than variadic function"};
+					Raise(e);
+				}
+			}
+		}
+
+		fn->canBeDirect = !fn->hasEnclosingMethod && count((lisp_object*)fn->closes) == 0 && !useThis;
+
+		const ICollection *methods = NULL;
+		for(size_t i = 0; i < MAX_POSITIONAL_ARITY + 1; i++)
+			if(methodArray[i])
+				methods = conj_(methods, (lisp_object*)methodArray[i]);
+		if(VariadicMethod)
+			methods = conj_(methods, (lisp_object*)VariadicMethod);
+
+		if(fn->canBeDirect) {
+			for(const ISeq *s = methods->obj.fns->SeqableFns->seq((Seqable*)methods); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
+				const FnMethod *fm = (FnMethod*)s->obj.fns->ISeqFns->first(s);
+				if(fm->locals) {
+					for(const ISeq *s2 = keys((lisp_object*)fm->locals); s2 != NULL; s2 = s2->obj.fns->ISeqFns->next(s2)) {
+						LocalBinding *lb = (LocalBinding*) s2->obj.fns->ISeqFns->first(s2);
+						if(lb->isArg)
+							lb->index--;
+					}
+				}
+			}
+		}
+
+		fn->methods = methods;
+		fn->variadicMethod = VariadicMethod;
+		fn->keywords = (IMap*) deref(KEYWORDS);
+		fn->vars = (IMap*) deref(VARS);
+		fn->constants = (IVector*) deref(VARS);
+		fn->keywordCallsites = (IVector*) deref(KEYWORD_CALLSITES);
+		fn->protocolCallsites = (IVector*) deref(PROTOCOL_CALLSITES);
+		fn->varCallsites = (IMap* /* ISet* */) deref(VAR_CALLSITES);
+		fn->constantsID = nextID();
+	FINALLY
+		popThreadBindings();
+	ENDTRY
+	
+	fn->hasPrimSigs = prims_count > 0;
+	const IMap *fmeta = ((lisp_object*)origForm)->meta;
+	if(fmeta) {
+		fmeta = fmeta->obj.fns->IMapFns->without(fmeta, (lisp_object*)LineKW);
+		fmeta = fmeta->obj.fns->IMapFns->without(fmeta, (lisp_object*)ColumnKW);
+		// fmeta = fmeta->obj.fns->IMapFns->without(fmeta, (lisp_object*)FILEKey);		// TODO
+		fmeta = fmeta->obj.fns->IMapFns->without(fmeta, (lisp_object*)retKey);
+	}
+	fn->hasMeta = count((lisp_object*)fmeta) > 0;
+	CompileObjExpr((ObjExpr*)fn, "", 0, NULL, fn->onceOnly);	// TODO
+	getCompiledClass((ObjExpr*)fn);
+	if(fn->hasMeta)
+		return NewMetaExpr((Expr*)fn, parseMapExpr(context == EVAL ? EVAL : EXPRESSION, fmeta));
+	return (Expr*)fn;
+}
+
+// IfExpr
+typedef struct {	// IfExpr
+	EXPR_BASE
+	const Expr *testExpr;
+	const Expr *thenExpr;
+	const Expr *elseExpr;
+	size_t line;
+	size_t column;
+} IfExpr;
+
+static const lisp_object* EvalIf(const Expr *self) {
+	assert(self->type == IFEXPR_type);
+	const IfExpr *i = (IfExpr*)self;
+	const lisp_object *t = i->testExpr->Eval(i->testExpr);
+	if(t && t != (lisp_object*)False)
+		return i->thenExpr->Eval(i->thenExpr);
+	return i->elseExpr->Eval(i->elseExpr);
+}
+
+static Expr* NewIfExpr(size_t line, size_t column, const Expr *testExpr, const Expr *thenExpr, const Expr *elseExpr) {
+	IfExpr *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = EXPR_type;
+	ret->obj.fns = &NullInterface;
+	ret->type = IFEXPR_type;
+	ret->Eval = EvalIf;
+
+	ret->line = line;
+	ret->column = column;
+	ret->testExpr = testExpr;
+	ret->thenExpr = thenExpr;
+	ret->elseExpr = elseExpr;
+
+	return (Expr*)ret;
+}
+
+static const Expr* parseIfExpr(Expr_Context context, const lisp_object *frm) {
+	const ISeq *form = (ISeq*)frm;
+	if(form->obj.fns->ICollectionFns->count((ICollection*)form) > 4) {
+		exception e = {RuntimeException, "Too many arguments to if"};
+		Raise(e);
+	}
+	if(form->obj.fns->ICollectionFns->count((ICollection*)form) < 3) {
+		exception e = {RuntimeException, "Too few arguments to if"};
+		Raise(e);
+	}
+
+	const PathNode *branch = NewPathNode(BRANCH, (PathNode*) getVar(CLEAR_PATH));
+	const Expr *testExpr = Analyze(context == EVAL ? EVAL : EXPRESSION, second(frm), NULL);
+	const Expr *thenExpr = NULL;
+	const Expr *elseExpr = NULL;
+	const lisp_object *margs[] = {
+		(lisp_object*)CLEAR_PATH, (lisp_object*)NewPathNode(PATH, branch),
+	};
+	size_t margc = sizeof(margs) / sizeof(margs[0]);
+	TRY
+		pushThreadBindings((IMap*)CreateHashMap(margc, margs));
+		thenExpr = Analyze(context, third(frm), NULL);
+	FINALLY
+		popThreadBindings();
+	ENDTRY
+
+	TRY
+		pushThreadBindings((IMap*)CreateHashMap(margc, margs));
+		thenExpr = Analyze(context, third(frm), NULL);
+	FINALLY
+		popThreadBindings();
+	ENDTRY
+
+	return NewIfExpr(lineDeref(), columnDeref(), testExpr, thenExpr, elseExpr);
+}
+
+// RecurExpr
+typedef struct {	// RecurExpr
+	EXPR_BASE
+	const IVector *args;
+	const IVector *loopLocals;
+	size_t line;
+	size_t column;
+	const char *source;
+} RecurExpr;
+
+static const lisp_object* EvalRecur(const Expr *self) {
+	assert(self->type == RECUREXPR_type);
+	exception e = {UnsupportedOperationException, "Can't eval recur"};
+	Raise(e);
+	__builtin_unreachable();
+}
+
+static Expr* NewRecurExpr(const IVector *loopLocals, const IVector *args, size_t line, size_t column, const char *source) {
+	RecurExpr *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = EXPR_type;
+	ret->obj.fns = &NullInterface;
+	ret->type = RECUREXPR_type;
+	ret->Eval = EvalRecur;
+
+	ret->loopLocals = loopLocals;
+	ret->args = args;
+	ret->line = line;
+	ret->column = column;
+	ret->source = source;
+
+	return (Expr*)ret;
+}
+
+static const Expr* parseRecurExpr(Expr_Context context, const lisp_object *frm) {
+	size_t line = lineDeref();
+	size_t column = columnDeref();
+	const char *source = toString(deref(SOURCE));
+
+	const ISeq *form = (ISeq*)frm;
+	const IVector *loopLocals = (IVector*)deref(LOOP_LOCALS);
+	const IVector *args = (IVector*)EmptyVector;
+
+	if(context != RETURN || loopLocals == NULL) {
+		exception e = {UnsupportedOperationException, "Can only recur from tail position"};
+		Raise(e);
+	}
+
+	for(const ISeq *s = form->obj.fns->ISeqFns->next(form); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
+		args = args->obj.fns->IVectorFns->cons(args, (lisp_object*)Analyze(EXPRESSION, s->obj.fns->ISeqFns->first(s), NULL));
+	}
+	size_t args_count = args->obj.fns->ICollectionFns->count((ICollection*)args);
+	size_t loopLocals_count = loopLocals->obj.fns->ICollectionFns->count((ICollection*)loopLocals);
+	if(args_count != loopLocals_count) {
+		exception e = {IllegalArgumentException, WriteString(AddInt(AddString(AddInt(AddString(NewStringWriter(),
+						"Mismatched argument count to recur, expected: "), loopLocals_count), " args, got: "), args_count))};
+		Raise(e);
+	}
+
+	for(size_t i = 0; i < loopLocals_count; i++) {
+		LocalBinding *lb = (LocalBinding*) loopLocals->obj.fns->IVectorFns->nth(loopLocals, i, NULL);
+		const object_type *primc = getPrimitiveType(lb);
+		if(primc) {
+			bool mismatch = false;
+			const object_type *pc = maybePrimitiveType((Expr*)args->obj.fns->IVectorFns->nth(args, i, NULL));
+			if(*primc == INTEGER_type && *pc != INTEGER_type)
+				mismatch = true;
+			else if(*primc == FLOAT_type && *pc != FLOAT_type)
+				mismatch = true;
+			if(mismatch) {
+				lb->recurMismatch = true;
+				if(boolCast(deref(WARN_ON_REFLECTION))) {
+					fprintf(stderr, "%s:%zd recur arg for primitive local: %s is not matching primitive, had: %s, needed: %s\n",
+							source, line, lb->name, pc ? object_type_string[*pc] : "Object", object_type_string[*primc]);
+				}
+			}
+		}
+	}
+
+	return NewRecurExpr(loopLocals, args, line, column, source);
+}
+
+// UnresolvedVarExpr
+typedef struct {	// UnresolvedVarExpr
+	EXPR_BASE
+	const Symbol *symbol;
+} UnresolvedVarExpr;
+
+static const lisp_object* EvalUnresolvedVar(const Expr *self) {
+	assert(self->type == UNRESOLVEDVAREXPR_type);
+	exception e = {IllegalArgumentException, "UnresolvedVarExpr cannot be evalled"};
+	Raise(e);
+	__builtin_unreachable();
+}
+
+static Expr* NewUnresolvedVarExpr(const Symbol *sym) {
+	UnresolvedVarExpr *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = EXPR_type;
+	ret->obj.fns = &NullInterface;
+	ret->type = UNRESOLVEDVAREXPR_type;
+	ret->Eval = EvalUnresolvedVar;
+
+	ret->symbol = sym;
+	return (Expr*)ret;
+}
 
 // IParser
 typedef const Expr* (*IParser)(Expr_Context context, const lisp_object *form);
@@ -1436,9 +1823,9 @@ typedef struct {	// Special
 } Special;
 const Special specials[] = {
 	{&_DefSymbol, &parseDefExpr},
-	// Loop			// TODO
-	// Recur		// TODO
-	// if			// TODO
+	{&_LoopSymbol, &parseLetExpr},
+	{&_RecurSymbol, &parseRecurExpr},
+	{&_IfSymbol, &parseIfExpr},
 	// case			// TODO
 	{&_LetSymbol, &parseLetExpr},
 	// LetFn		// TODO
@@ -1482,18 +1869,18 @@ IParser isSpecial(const lisp_object *sym) {
 
 
 
-__attribute__((unused)) static void consumeWhitespace(FILE *input) {
-	int ch = getc(input);
+__attribute__((unused)) static void consumeWhitespace(LineNumberReader *input) {
+	int ch = getcr(input);
 	while(isspace(ch))
-		ch = getc(input);
-	ungetc(ch, input);
+		ch = getcr(input);
+	ungetcr(ch, input);
 }
 
 static int registerConstant(const lisp_object *obj) {
 	if(!isBound(CONSTANTS))
 		return -1;
 	const IMap *ids = (IMap*) deref(CONSTANT_IDS);
-	const lisp_object *o = ids->obj.fns->IMapFns->entryAt(ids, obj);
+	const lisp_object *o = ids->obj.fns->IMapFns->entryAt(ids, obj)->val;
 	assert(o->type == INTEGER_type);
 	if(o)
 		return IntegerValue((Integer*)o);
@@ -1509,7 +1896,7 @@ static const Expr* registerKeyword(const Keyword *kw) {
 	if(!isBound(KEYWORDS))
 		return NewKeywordExpr(kw);
 	const IMap *keywordsMap = (IMap*) deref(KEYWORDS);
-	const lisp_object *id = keywordsMap->obj.fns->IMapFns->entryAt(keywordsMap, (lisp_object*)kw);
+	const lisp_object *id = keywordsMap->obj.fns->IMapFns->entryAt(keywordsMap, (lisp_object*)kw)->val;
 	if(id == NULL) {
 		setVar(KEYWORDS, (lisp_object*)keywordsMap->obj.fns->IMapFns->assoc(keywordsMap, (lisp_object*)kw, (lisp_object*)NewInteger(registerConstant((lisp_object*)kw))));
 	}
@@ -1675,7 +2062,7 @@ static const Expr* AnalyzeSeq(Expr_Context context, const ISeq *form, const char
 	// if(inlined != NULL)
 	// 	return Analyze(context, preserveTag(form, inlined->obj.fns->IFnFns->applyTo(inlined, next)), name);	// TODO preserveTag
 	if(((lisp_object*)FNSymbol)->Equals((lisp_object*)FNSymbol, op)) {
-		// TODO return FnExpr.parse(context, form, name);
+		return parseFnExpr(context, form, name);
 	}
 	if(op->type == SYMBOL_type ) {
 		IParser p = isSpecial(op);
@@ -1740,7 +2127,7 @@ static const Expr* analyzeSymbol(const Symbol *sym) {
 		// case CLASS_type:	// TODO
 		// 	return NewConstantExpr(o);
 		case SYMBOL_type:
-			// return NewUnresolvedVarExpr((Symbol*)o);	// TODO
+			return NewUnresolvedVarExpr((Symbol*)o);
 		default: {
 			exception e = {RuntimeException, WriteString(AddString(AddString(AddString(NewStringWriter(), "Unable to resolve symbol: "),
 							toString((lisp_object*)sym)), " in this context"))};
@@ -1830,6 +2217,14 @@ static object_type primClass(const Symbol *sym) {
 	}
 
 	return c;
+}
+
+static size_t lineDeref(void) {
+	return IntegerValue((Integer*)deref(LINE));
+}
+
+static size_t columnDeref(void) {
+	return IntegerValue((Integer*)deref(COLUMN));
 }
 
 static object_type tagType(const lisp_object *tag) {
@@ -1963,15 +2358,20 @@ void initCompiler(void) {
 	const lisp_object *mapArgs[] = {(lisp_object*)internKeyword2(NULL, "once"), (lisp_object*)True};
 	FnOnceSymbol = (Symbol*)withMeta((lisp_object*)FnOnceSymbol, (IMap*)CreateHashMap(2, mapArgs));
 
+	Namespace *lispNS = findOrCreateNS(internSymbol1("lisp.core"));
+
 	ALLOW_UNRESOLVED_VARS = setDynamic(internVar(LISP_ns, internSymbol1("*allow-unresolved-vars*"), (lisp_object*)False, true));
 	CLEAR_PATH = setDynamic(createVar(NULL));
 	CLEAR_ROOT = setDynamic(createVar(NULL));
 	CLEAR_SITES = setDynamic(createVar(NULL));
+	COLUMN = setDynamic(createVar((lisp_object*)NewInteger(0)));
+	COLUMN_AFTER = setDynamic(createVar((lisp_object*)NewInteger(0)));
+	COLUMN_BEFORE = setDynamic(createVar((lisp_object*)NewInteger(0)));
 	COMPILE_STUB_SYM = setDynamic(createVar(NULL));
 	COMPILE_STUB_CLASS = setDynamic(createVar(NULL));
 	CONSTANTS = setDynamic(createVar(NULL));
 	CONSTANT_IDS = setDynamic(createVar(NULL));
-	INSTANCE = internNS(findOrCreateNS(internSymbol1("lisp.core")), internSymbol1("instance?"));
+	INSTANCE = internNS(lispNS, internSymbol1("instance?"));
 	IN_CATCH_FINALLY = setDynamic(createVar(NULL));
 	KEYWORD_CALLSITES = setDynamic(createVar(NULL));
 	KEYWORDS = setDynamic(createVar(NULL));
@@ -1979,11 +2379,17 @@ void initCompiler(void) {
 	METHOD_RETURN_CONTEXT = setDynamic(createVar(NULL));
 	NEXT_LOCAL_NUM = setDynamic(createVar((lisp_object*)NewInteger(0)));
 	NO_RECUR = setDynamic(createVar(NULL));
+	LINE = setDynamic(createVar((lisp_object*)NewInteger(0)));
+	LINE_AFTER = setDynamic(createVar((lisp_object*)NewInteger(0)));
+	LINE_BEFORE = setDynamic(createVar((lisp_object*)NewInteger(0)));
 	LOCAL_ENV = setDynamic(createVar(NULL));
 	LOOP_LOCALS = setDynamic(createVar(NULL));
-	SOURCE = setDynamic(internVar(findOrCreateNS(internSymbol1("lisp.core")), internSymbol1("*source-path*"), (lisp_object*)NewString("NO_SOURCE_FILE"), true));
-	SOURCE_PATH = setDynamic(internVar(findOrCreateNS(internSymbol1("lisp.core")), internSymbol1("*file*"), (lisp_object*)NewString("NO_SOURCE_PATH"), true));
+	PROTOCOL_CALLSITES = setDynamic(createVar(NULL));
+	SOURCE = setDynamic(internVar(lispNS, internSymbol1("*source-path*"), (lisp_object*)NewString("NO_SOURCE_FILE"), true));
+	SOURCE_PATH = setDynamic(internVar(lispNS, internSymbol1("*file*"), (lisp_object*)NewString("NO_SOURCE_PATH"), true));
 	VARS = setDynamic(createVar(NULL));
+	VAR_CALLSITES = setDynamic(createVar(NULL));
+	WARN_ON_REFLECTION = setDynamic(internVar(lispNS, internSymbol1("*warn-on-reflection*"), (lisp_object*)False, true));
 }
 
 Namespace* CurrentNS(void) {
@@ -2013,23 +2419,23 @@ const lisp_object* Eval(const lisp_object *form) {
 	return x->Eval(x);
 }
 
-const lisp_object* compilerLoad(FILE *reader, const char *path, const char *name) {
+const lisp_object* compilerLoad(LineNumberReader *reader, const char *path, const char *name) {
 	const lisp_object *ret = NULL;
 	const lisp_object *mapArgs[] = {
 		(lisp_object*)SOURCE_PATH, (lisp_object*)NewString(path),
 		(lisp_object*)SOURCE, (lisp_object*)NewString(name),
 		(lisp_object*)METHOD, NULL,
 		(lisp_object*)LOCAL_ENV, NULL,
-		// LOOP_LOCALS, NULL,	// TODO
+		(lisp_object*)LOOP_LOCALS, NULL,
 		(lisp_object*)NEXT_LOCAL_NUM, (lisp_object*)NewInteger(0),
 		// READEVAL, True,	// TODO
 		(lisp_object*)Current_ns, deref(Current_ns),
-		// LINE_BEFORE	// TODO
-		// COLUMN_BEFORE	// TODO
-		// LINE_AFTER	// TODO
-		// COLUMN_AFTER	// TODO
+		(lisp_object*)LINE_BEFORE, (lisp_object*)NewInteger(getLineNumber(reader)),
+		(lisp_object*)COLUMN_BEFORE, (lisp_object*)NewInteger(getColumnNumber(reader)),
+		(lisp_object*)LINE_AFTER, (lisp_object*)NewInteger(getLineNumber(reader)),
+		(lisp_object*)COLUMN_AFTER, (lisp_object*)NewInteger(getColumnNumber(reader)),
 		// UNCHECKED_MATH, deref(UNCHECKED_MATH),	// TODO
-		// WARN_ON_REFLECTION, deref(WARN_ON_REFLECTION),	// TODO
+		(lisp_object*)WARN_ON_REFLECTION, deref(WARN_ON_REFLECTION),
 		// DATA_READERS, deref(DATA_READERS),	// TODO
 	};
 	size_t mapArgc = sizeof(mapArgs)/sizeof(mapArgs[0]);
@@ -2039,11 +2445,11 @@ const lisp_object* compilerLoad(FILE *reader, const char *path, const char *name
 			if(r->type == ERROR_type) {
 				break;
 			}
-			// set(LINE_AFTER, ...);	// TODO
-			// set(COLUMN_AFTER, ...);	// TODO
+			setVar(LINE_AFTER, (lisp_object*)NewInteger(getLineNumber(reader)));
+			setVar(COLUMN_AFTER, (lisp_object*)NewInteger(getColumnNumber(reader)));
 			ret = Eval(r);
-			// set(LINE_BEFORE, ...);	// TODO
-			// set(COLUMN_BEFORE, ...);	// TODO
+			setVar(LINE_BEFORE, (lisp_object*)NewInteger(getLineNumber(reader)));
+			setVar(COLUMN_BEFORE, (lisp_object*)NewInteger(getColumnNumber(reader)));
 		}
 	EXCEPT(CompilerExcp)
 		ReRaise;

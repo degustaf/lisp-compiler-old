@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <stdio.h>	// For Debugging.
+
 #include "Bool.h"
 #include "Compiler.h"
 #include "Error.h"
@@ -17,37 +19,38 @@
 #include "Namespace.h"
 #include "Numbers.h"
 #include "Strings.h"
+#include "StringWriter.h"
 #include "Symbol.h"
 #include "Util.h"
 #include "Vector.h"
 
-const lisp_object DONE_lisp_object = {DONE_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
-const lisp_object NOOP_lisp_object = {NOOP_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
-const lisp_object EOF_lisp_object  = {EOF_type, sizeof(lisp_object), NULL, NULL, NULL, NULL, NULL};
+const lisp_object DONE_lisp_object = {DONE_type, sizeof(lisp_object), NULL, NULL, NULL, NULL};
+const lisp_object NOOP_lisp_object = {NOOP_type, sizeof(lisp_object), NULL, NULL, NULL, NULL};
+const lisp_object EOF_lisp_object  = {EOF_type, sizeof(lisp_object), NULL, NULL, NULL, NULL};
 regex_t symbol_regex;
 
-typedef const lisp_object* (*MacroFn)(FILE*, char /* *lisp_object opts, *lisp_object pendingForms */);
+typedef const lisp_object* (*MacroFn)(LineNumberReader*, char /* *lisp_object opts, *lisp_object pendingForms */);
 static MacroFn macros[128];
 
 // Static Function Declarations.
 static MacroFn get_macro(int ch);
 static bool isMacro(int ch);
 static bool isTerminatingMacro(int ch);
-static lisp_object *ReadNumber(FILE *input, char ch);
-static char *ReadToken(FILE *input, char ch);
+static lisp_object *ReadNumber(LineNumberReader *input, char ch);
+static char *ReadToken(LineNumberReader *input, char ch);
 static const lisp_object *interpretToken(const char *token);
-static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object **ReadDelimitedList(LineNumberReader *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */);
 
 // Macros
-static const lisp_object *CharReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static const lisp_object *ListReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static const lisp_object *VectorReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static const lisp_object *MapReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static const lisp_object *StringReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static const lisp_object *UnmatchedParenReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static const lisp_object *WrappingReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static const lisp_object *CommentReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
-static const lisp_object *MetaReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *CharReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *ListReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *VectorReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *MapReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *StringReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *UnmatchedParenReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *WrappingReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *CommentReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
+static const lisp_object *MetaReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */);
 
 void init_reader() {
 	printf("In init_reader\n");
@@ -80,12 +83,12 @@ void init_reader() {
 
 }
 
-const lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
-	int ch = getc(input);
+const lisp_object *read(LineNumberReader *input, bool EOF_is_error, char return_on /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
+	int ch = getcr(input);
 
 	while(true) {
 		while(isspace(ch)){
-			ch = getc(input);
+			ch = getcr(input);
 		}
 
 		if(ch == EOF) {
@@ -110,9 +113,9 @@ const lisp_object *read(FILE *input, bool EOF_is_error, char return_on /* boolea
 		}
 
 		if(ch == '+' || ch == '-') {
-			int ch2 = getc(input);
+			int ch2 = getcr(input);
 			if(isdigit(ch2)) {
-				ungetc(ch2, input);
+				ungetcr(ch2, input);
 				return ReadNumber(input, ch);
 			}
 		}
@@ -144,7 +147,7 @@ static bool isTerminatingMacro(int ch) {
 	return ch != '#' && ch != '\'' && ch != '%' && isMacro(ch);
 }
 
-static lisp_object* ReadNumber(FILE *input, char ch) {
+static lisp_object* ReadNumber(LineNumberReader *input, char ch) {
 	size_t i = 1;
 	size_t size = 256;
 	char *buffer = GC_MALLOC_ATOMIC(size * sizeof(*buffer));
@@ -152,9 +155,9 @@ static lisp_object* ReadNumber(FILE *input, char ch) {
 
 	for(buffer[0] = ch; true; size *= 2) {
 		for( ;i<size; i++) {
-			int ch2 = getc(input);
+			int ch2 = getcr(input);
 			if(ch2 == EOF || isspace(ch2) || isMacro(ch2)) {
-				ungetc(ch2, input);
+				ungetcr(ch2, input);
 				char *endptr = NULL;
 				errno = 0;
 				buffer[i] = '\0';
@@ -179,7 +182,7 @@ static lisp_object* ReadNumber(FILE *input, char ch) {
 	}
 }
 
-static char *ReadToken(FILE *input, char ch) {
+static char *ReadToken(LineNumberReader *input, char ch) {
 	size_t i = 1;
 	size_t size = 256;
 	char *buffer = GC_MALLOC_ATOMIC(size * sizeof(*buffer));
@@ -187,9 +190,9 @@ static char *ReadToken(FILE *input, char ch) {
 
 	for(buffer[0] = ch; true; size *= 2) {
 		for( ;i<size; i++) {
-			int ch2 = getc(input);
+			int ch2 = getcr(input);
 			if(ch2 == EOF || isspace(ch2) || isTerminatingMacro(ch2)) {
-				ungetc(ch2, input);
+				ungetcr(ch2, input);
 				buffer[i] = '\0';
 				return buffer;
 			}
@@ -273,8 +276,8 @@ static const lisp_object *interpretToken(const char *token) {
 	__builtin_unreachable();
 }
 
-static const lisp_object *CharReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
-	char ch = getc(input);
+static const lisp_object *CharReader(LineNumberReader* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
+	char ch = getcr(input);
 	if(ch == EOF) {
 		exception e = {RuntimeException, "EOF while reading character"};
 		Raise(e);
@@ -301,19 +304,19 @@ static const lisp_object *CharReader(FILE* input, __attribute__((unused)) char c
 	__builtin_unreachable();
 }
 
-static const lisp_object *StringReader(FILE* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *StringReader(LineNumberReader* input, __attribute__((unused)) char c /* *lisp_object opts, *lisp_object pendingForms */) {
 	size_t size = 256;
 	size_t i = 0;
 	char *str = GC_MALLOC_ATOMIC(size * sizeof(*str));
 	assert(str);
 
-	for(int ch = getc(input); ch != '"'; ch = getc(input)) {
+	for(int ch = getcr(input); ch != '"'; ch = getcr(input)) {
 		if(ch == EOF) {
 			exception e = {RuntimeException, "EOF while reading string."};
 			Raise(e);
 		}
 		if(ch == '\\') {
-			ch = getc(input);
+			ch = getcr(input);
 			if(ch == EOF) {
 				exception e = {RuntimeException, "EOF while reading string."};
 				Raise(e);
@@ -357,7 +360,8 @@ static const lisp_object *StringReader(FILE* input, __attribute__((unused)) char
 	return obj;
 }
 
-static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object **ReadDelimitedList(LineNumberReader *input, char delim, size_t *const count /* boolean isRecursive, *lisp_object opts, *lisp_object pendingForms */) {
+	const size_t firstLine = getLineNumber(input);
 	size_t size = 8;
 	size_t i = 0;
 	const lisp_object **ret = GC_MALLOC(size * sizeof(*ret));
@@ -366,7 +370,9 @@ static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *co
 	while(true) {
 		const lisp_object *form = read(input, true, delim);
 		if(form->type == EOF_type) {
-			exception e = {RuntimeException, "EOF while reading"};
+			exception e = {RuntimeException, firstLine > 0 ?
+				"EOF while reading" :
+				WriteString(AddInt(AddString(NewStringWriter(), "EOF while reading, starting at line "), firstLine))};
 			Raise(e);
 		}
 		if(form == &DONE_lisp_object) {
@@ -382,20 +388,31 @@ static const lisp_object **ReadDelimitedList(FILE *input, char delim, size_t *co
 	}
 }
 
-static const lisp_object *ListReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *ListReader(LineNumberReader* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+	size_t line = getLineNumber(input);
+	size_t column = line ? getColumnNumber(input) - 1 : 0;
 	size_t count;
 	const lisp_object **list = ReadDelimitedList(input, ')', &count);
 	if(count == 0) return (lisp_object*)EmptyList;
-	return (lisp_object*)CreateList(count, list);
+	const lisp_object *s = (lisp_object*)CreateList(count, list);
+	if(line) {
+		const lisp_object *margs[] = {
+			(lisp_object*) LineKW, (lisp_object*) NewInteger(line),
+			(lisp_object*) ColumnKW, (lisp_object*) NewInteger(column),
+		};
+		size_t margc = sizeof(margs) / sizeof(margs[0]);
+		return withMeta(s, (IMap*) CreateHashMap(margc, margs));
+	}
+	return s;
 }
 
-static const lisp_object *VectorReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *VectorReader(LineNumberReader* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
 	size_t count;
 	const lisp_object **list = ReadDelimitedList(input, ']', &count);
 	return (lisp_object*) CreateVector(count, list);
 }
 
-static const lisp_object *MapReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *MapReader(LineNumberReader* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
 	size_t count;
 	const lisp_object **list = ReadDelimitedList(input, '}', &count);
 	if(count & 1) {
@@ -405,25 +422,27 @@ static const lisp_object *MapReader(FILE* input, __attribute__((unused)) char ch
 	return (lisp_object*)CreateHashMap(count, list);
 }
 
-static const lisp_object *UnmatchedParenReader(__attribute__((unused)) FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *UnmatchedParenReader(__attribute__((unused)) LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
 	exception e = {RuntimeException, WriteString(AddChar(AddString(NewStringWriter(), "Unmatched delimiter: "), ch))};
 	Raise(e);
 	__builtin_unreachable();
 }
 
-static const lisp_object *WrappingReader(FILE* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *WrappingReader(LineNumberReader* input, char ch /* *lisp_object opts, *lisp_object pendingForms */) {
 	const Symbol *sym = ch == '\'' ? quoteSymbol : 
 		ch == '@' ? derefSymbol : NULL;
 	const lisp_object *o = read(input, true, '\0');
 	return (lisp_object*) listStar2((lisp_object*)sym, o, NULL);
 }
 
-static const lisp_object *CommentReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
-	for(int ch2 = 0; ch2 != EOF && ch2 != '\n' && ch2 != '\r'; ch2 = getc(input)) {}
+static const lisp_object *CommentReader(LineNumberReader* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+	for(int ch2 = 0; ch2 != EOF && ch2 != '\n' && ch2 != '\r'; ch2 = getcr(input)) {}
 	return &NOOP_lisp_object;
 }
 
-static const lisp_object *MetaReader(FILE* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+static const lisp_object *MetaReader(LineNumberReader* input, __attribute__((unused)) char ch /* *lisp_object opts, *lisp_object pendingForms */) {
+	size_t line = getLineNumber(input);
+	size_t column = line ? getColumnNumber(input) - 1 : 0;
 	const lisp_object *o = read(input, true, '\0');
 	const IMap *meta = (IMap*) EmptyHashMap;
 	switch(o->type) {
@@ -443,6 +462,11 @@ static const lisp_object *MetaReader(FILE* input, __attribute__((unused)) char c
 	}
 
 	o = read(input, true, '\0');
+	if(line && isISeq(o)) {
+		meta = meta->obj.fns->IMapFns->assoc(meta, (lisp_object*)LineKW, (lisp_object*)NewInteger(line));
+		meta = meta->obj.fns->IMapFns->assoc(meta, (lisp_object*)ColumnKW, (lisp_object*)NewInteger(column));
+	}
+
 	const IMap *ometa = o->meta;
 	for(const ISeq *s = seq((lisp_object*)meta); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
 		const MapEntry *kv = (MapEntry*) s->obj.fns->ISeqFns->first(s);

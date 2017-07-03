@@ -4,8 +4,10 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "ASeq.h"
 #include "AFn.h"
+#include "ASeq.h"
+#include "AVector.h"
+#include "Error.h"
 #include "gc.h"
 #include "Interfaces.h"
 #include "lisp_pthread.h"
@@ -31,7 +33,7 @@ static Node *NewNode(bool editable, pthread_t thread_id, size_t count, const lis
 static Node *editableRoot(const Node *const root);
 static Node *newPath(bool editable, pthread_t thread_id, size_t level, Node *node);
 
-const Node _EmptyNode = {{NODE_type, sizeof(Node), NULL, NULL, NULL, NULL, NULL}, false, 0, {NULL}};
+const Node _EmptyNode = {{NODE_type, sizeof(Node), NULL, NULL, NULL, NULL}, false, 0, {NULL}};
 const Node *const EmptyNode = &_EmptyNode;
 
 // ChunkedSeq
@@ -53,18 +55,18 @@ static const lisp_object* firstChunkedSeq(const ISeq*);
 static const ISeq* nextChunkedSeq(const ISeq*);
 static const ISeq* chunkedNextChunkedSeq(const ChunkedSeq*);
 
-Seqable_vtable ChunkedSeq_Seqable_vtable = {
+const Seqable_vtable ChunkedSeq_Seqable_vtable = {
 	seqASeq,			// seq
 };
 
-ICollection_vtable ChunkedSeq_ICollection_vtable = {
+const ICollection_vtable ChunkedSeq_ICollection_vtable = {
 	countChunkedSeq,			// count
 	(ICollectionFn1)consASeq,	// cons
 	emptyASeq,					// empty
 	EquivASeq					// Equiv
 };
 
-ISeq_vtable ChunkedSeq_ISeq_vtable = {
+const ISeq_vtable ChunkedSeq_ISeq_vtable = {
 	firstChunkedSeq,	// first
 	nextChunkedSeq,		// next
 	moreASeq,			// more
@@ -114,56 +116,57 @@ static const Vector *asPersistent(TransientVector *v);
 // Vector Function Declarations.
 
 static const Vector *NewVector(size_t cnt, size_t shift, const Node *root, size_t count, const lisp_object* const* array);
-static const lisp_object *VectorCopy(const lisp_object *obj);
 static TransientVector *asTransient(const Vector *v);
 static const ISeq* seqVector(const Seqable*);
 static size_t countVector(const ICollection *o);
+static const IStack* popVector(const IStack*);
+static const IVector* assocNVector(const IVector*, size_t, const lisp_object*);
 static const IVector* consVector(const IVector*, const lisp_object*);
 static const lisp_object *nthVector(const IVector *iv, size_t n, const lisp_object *notFound);
 static const lisp_object *const *arrayForV(const Vector *v, size_t i);
 static size_t tailoffV(const Vector *v);
 static Node *pushTailV(const Vector *v, size_t level, const Node *parent, Node *tail);
 
-Seqable_vtable Vector_Seqable_vtable = {
+const Seqable_vtable Vector_Seqable_vtable = {
 	seqVector, // seq
 };
 
-Reversible_vtable Vector_Reversible_vtable = {
-	NULL // rseq		// TODO
+const Reversible_vtable Vector_Reversible_vtable = {
+	rseq // rseq
 };
 
-ICollection_vtable Vector_ICollection_vtable = {
+const ICollection_vtable Vector_ICollection_vtable = {
 	countVector,					// count
 	(ICollectionFn1) consVector,	// cons
-	NULL,							// empty	// TODO
-	NULL,							// Equiv	// TODO
+	emptyAVector,					// empty
+	EquivAVector,					// Equiv
 };
 
-IStack_vtable Vector_IStack_vtable = {
-	NULL,	// peek	// TODO
-	NULL,	// pop	// TODO
+const IStack_vtable Vector_IStack_vtable = {
+	peekAVector,	// peek
+	popVector,		// pop
 };
 
-IFn_vtable Vector_IFn_vtable = {
-	invoke0AFn,	// invoke0
-	NULL,		// invoke1	// TODO
-	invoke2AFn,	// invoke2
-	invoke3AFn,	// invoke3
-	invoke4AFn,	// invoke4
-	invoke5AFn,	// invoke5
-	applyToAFn,	// applyTo
+const IFn_vtable Vector_IFn_vtable = {
+	invoke0AFn,		// invoke0
+	invoke1AVector,	// invoke1
+	invoke2AFn,		// invoke2
+	invoke3AFn,		// invoke3
+	invoke4AFn,		// invoke4
+	invoke5AFn,		// invoke5
+	applyToAFn,		// applyTo
 };
 
-IVector_vtable Vector_IVector_vtable = {
-	NULL,		// length	// TODO
-	NULL,		// assocN	// TODO
-	consVector,	// cons
-	NULL,		// assoc	// TODO
-	NULL,		// entryAt	// TODO
-	nthVector,	// nth
+const IVector_vtable Vector_IVector_vtable = {
+	lengthAVector,	// length
+	assocNVector,	// assocN
+	consVector,		// cons
+	assocAVector,	// assoc
+	entryAtAVector,	// entryAt
+	nthVector,		// nth
 };
 
-interfaces Vector_interfaces = {
+const interfaces Vector_interfaces = {
 	&Vector_Seqable_vtable,		// SeqableFns
 	&Vector_Reversible_vtable,	// ReversibleFns
 	&Vector_ICollection_vtable,	// ICollectionFns
@@ -174,8 +177,7 @@ interfaces Vector_interfaces = {
 	NULL,						// IMapFns
 };
 
-const Vector _EmptyVector = {{VECTOR_type, sizeof(Vector), toString, VectorCopy, EqualBase, NULL, &Vector_interfaces},
-	// TODO EqualVector
+const Vector _EmptyVector = {{VECTOR_type, sizeof(Vector), toString, EqualsAVector, NULL, &Vector_interfaces},
                    0,
                    LOG_NODE_SIZE,
                    &_EmptyNode,
@@ -206,7 +208,7 @@ Node *editableRoot(const Node *const root) {
         const lisp_object *o = root->array[i];
         if(o == NULL)
             break;
-        ret->array[i] = (*(o->copy))(o);
+        ret->array[i] = copy(o);
     }
 
     return ret;
@@ -226,8 +228,7 @@ static ChunkedSeq* NewChunkedSeq(const IMap *meta, const Vector *v, size_t count
 	ret->obj.type = CHUNKEDSEQ_type;
 	ret->obj.size = sizeof(*ret);
 	ret->obj.toString = toString;
-	ret->obj.copy = NULL;	// TODO copyChunkedSeq
-	ret->obj.Equals = NULL;	// TODO EqualsChunkedSeq
+	ret->obj.Equals = EqualsASeq;
 	ret->obj.meta = meta ? meta : (IMap*) EmptyHashMap;
 	ret->obj.fns = &ChunkSeq_interfaces;
 
@@ -353,7 +354,7 @@ static const Vector *NewVector(size_t cnt, size_t shift, const Node *root, size_
 	return ret;
 }
 
-const Vector *CreateVector(size_t count, const lisp_object **entries) {
+const Vector *CreateVector(size_t count, const lisp_object *const *entries) {
 	if(count == 0) return EmptyVector;
     Vector *ret = GC_MALLOC(sizeof(*ret));
     size_t cnt = count < NODE_SIZE ? count : NODE_SIZE;
@@ -374,10 +375,6 @@ const Vector *CreateVector(size_t count, const lisp_object **entries) {
 	return asPersistent(trans);
 }
 
-static const lisp_object *VectorCopy(__attribute__((unused)) const lisp_object *obj){
-    return NULL;	// TODO		// VectorCopy
-}
-
 static TransientVector *asTransient(const Vector *v) {
     assert(sizeof(TransientVector) == sizeof(Vector));
     TransientVector *ret = GC_MALLOC(sizeof(*ret));
@@ -391,7 +388,7 @@ static TransientVector *asTransient(const Vector *v) {
         const lisp_object *o = v->tail[i];
         if(o == NULL)
             break;
-        ret->tail[i] = o->copy(o);
+        ret->tail[i] = copy(o);
     }
 
     return ret;
@@ -435,6 +432,87 @@ static const IVector* consVector(const IVector *iv, const lisp_object *x) {
 	const lisp_object *NewTail[NODE_SIZE];
 	NewTail[0] = x;
 	return (IVector*)NewVector(v->count + 1, newshift, NewRoot, 1, NewTail);
+}
+
+static const Node* popTail(const Vector *v, size_t shift, const Node *node) {
+	size_t subindex = ((v->count - 2) >> shift) & BITMASK;
+	if(shift > LOG_NODE_SIZE) {
+		const Node *newChild = popTail(v, shift - LOG_NODE_SIZE, (Node*) node->array[subindex]);
+		if(newChild == NULL && subindex == 0)
+			return NULL;
+		Node *ret = NewNode(v->root->editable, v->root->thread_id, NODE_SIZE, node->array);
+		ret->array[subindex] = (lisp_object*)newChild;
+		return ret;
+	}
+
+	if(subindex == 0)
+		return NULL;
+
+	Node *ret = NewNode(v->root->editable, v->root->thread_id, NODE_SIZE, node->array);
+	ret->array[subindex] = NULL;
+	return ret;
+}
+
+static const IStack* popVector(const IStack *is) {
+	assert(is->obj.type == VECTOR_type);
+	const Vector *v = (Vector*)is;
+	if(v->count == 0) {
+		exception e = {IllegalStateException, "Can't pop empty vector"};
+		Raise(e);
+	}
+	if(v->count == 1)
+		return (IStack*)withMeta((lisp_object*)EmptyVector, v->obj.meta);
+
+	if(v->count  - tailoffV(v) > 1) {
+		const lisp_object *newTail[NODE_SIZE];
+		memcpy(newTail, v->tail, sizeof(newTail));
+		return (IStack*)NewVector(v->count - 1, v->shift, v->root, NODE_SIZE, newTail);
+	}
+
+	const lisp_object * const* newTail = arrayForV(v, v->count -2);
+	const Node *newRoot = popTail(v, v->shift, v->root);
+	size_t newshift = v->shift;
+	if(newRoot == NULL) {
+		newRoot = EmptyNode;
+	} else {
+		newRoot = (Node*)newRoot->array[0];
+		newshift -= LOG_NODE_SIZE;
+	}
+
+	return (IStack*) NewVector(v->count - 1, newshift, newRoot, NODE_SIZE, newTail);
+}
+
+static const Node* doAssoc(size_t shift, const Node *node, size_t n, const lisp_object *val) {
+	Node *ret = NewNode(node->editable, node->thread_id, NODE_SIZE, node->array);
+
+	if(shift == 0) {
+		ret->array[n & BITMASK] = val;
+	} else {
+		size_t subindex = (n >> shift) & BITMASK;
+		ret->array[subindex] = (lisp_object*) doAssoc(shift - LOG_NODE_SIZE, (Node*) node->array[subindex], n, val);
+	}
+	
+	return ret;
+}
+
+static const IVector* assocNVector(const IVector *iv, size_t n, const lisp_object *val) {
+	assert(iv->obj.type == VECTOR_type);
+	const Vector *v = (Vector*)iv;
+	if(n < v->count) {
+		if(n >= tailoffV(v)) {
+			const lisp_object *newTail[NODE_SIZE];
+			memcpy(newTail, v->tail, sizeof(newTail));
+			newTail[n & BITMASK] = val;
+			return (IVector*) NewVector(v->count, v->shift, v->root, v->count & BITMASK, newTail);
+		}
+		return (IVector*) NewVector(v->count, v->shift, doAssoc(v->shift, v->root, n, val), v->count & BITMASK, v->tail);
+	}
+
+	if(n == v->count)
+		return consVector(iv, val);
+	exception e = {IndexOutOfBoundException, ""};
+	Raise(e);
+	__builtin_unreachable();
 }
 
 static const lisp_object *nthVector(const IVector *iv, size_t n, const lisp_object *notFound) {

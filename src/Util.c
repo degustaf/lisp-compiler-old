@@ -3,8 +3,8 @@
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>
-#include <stdio.h>
 
+#include "AMap.h"
 #include "Bool.h"
 #include "Cons.h"
 #include "Error.h"
@@ -14,6 +14,7 @@
 #include "Map.h"
 #include "Numbers.h"
 #include "Murmur3.h"
+#include "StringWriter.h"
 #include "Symbol.h"
 #include "Vector.h"
 
@@ -148,14 +149,21 @@ const char *toString(const lisp_object *obj) {
 	return WriteString(sw);
 }
 
+const lisp_object* copy(const lisp_object *obj) {
+	lisp_object *ret = GC_MALLOC(obj->size);
+	memcpy(ret, obj, obj->size);
+
+	return ret;
+}
+
 const lisp_object *get(const lisp_object *coll, const lisp_object *key, const lisp_object *NotFound) {
 	if(coll == NULL) return NULL;
 
 	const lisp_object *ret = NULL;
 	if(isIMap(coll)) {
-		ret = coll->fns->IMapFns->entryAt((IMap*)coll, key);
+		ret = coll->fns->IMapFns->entryAt((IMap*)coll, key)->val;
 	} else if(isIVector(coll)) {
-		ret = coll->fns->IVectorFns->entryAt((IVector*)coll, key);
+		ret = coll->fns->IVectorFns->entryAt((IVector*)coll, key)->val;
 	}
 	return ret ? ret : NotFound;
 }
@@ -275,4 +283,34 @@ const ISeq* listStar4(const lisp_object *arg1, const lisp_object *arg2, const li
 
 const ISeq* listStar5(const lisp_object *arg1, const lisp_object *arg2, const lisp_object *arg3, const lisp_object *arg4, const lisp_object *arg5, const ISeq *rest) {
 	return cons(arg1, (lisp_object*)cons(arg2, (lisp_object*)cons(arg3, (lisp_object*)cons(arg4, (lisp_object*)cons(arg5, (lisp_object*)rest)))));
+}
+
+const char* replace(const char *str, const char *orig, const char *rep) {
+	size_t len = strlen(str);
+	char buffer[len+1];
+	strncpy(buffer, str, len+1);
+	char *base = buffer;
+	StringWriter *sw = NewStringWriter();
+	
+	for(char *ptr = strstr(base, orig); ptr != NULL; ptr = strstr(base, orig)) {
+		*ptr = '\0';
+		AddString(sw, base);
+		if(*(ptr+1))
+			base = ptr+1;
+		AddString(sw, rep);
+	}
+
+	return WriteString(sw);
+}
+
+const ISeq* keys(const lisp_object *coll) {
+	if(isIMap(coll))
+		return (ISeq*)CreateKeySeqFromMap((IMap*)coll);
+	return (ISeq*)CreateKeySeq(seq(coll));
+}
+
+const ISeq* vals(const lisp_object *coll) {
+	if(isIMap(coll))
+		return (ISeq*)CreateValSeqFromMap((IMap*)coll);
+	return (ISeq*)CreateValSeq(seq(coll));
 }

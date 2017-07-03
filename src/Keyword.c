@@ -4,6 +4,7 @@
 #include "gc.h"
 #include "Interfaces.h"
 #include "Map.h"
+#include "StringWriter.h"
 #include "Util.h"
 
 struct Keyword_struct {
@@ -17,9 +18,8 @@ static const Keyword* NewKeyword(const Symbol* s);
 static const lisp_object* invoke1Keyword(const IFn*, const lisp_object*);
 static const lisp_object* invoke2Keyword(const IFn*, const lisp_object*, const lisp_object*);
 static const char *toStringKeyword(const lisp_object *);
-static bool EqualsKeyword(const lisp_object *x, const lisp_object *y);
 
-IFn_vtable Keyword_IFn_vtable = {
+const IFn_vtable Keyword_IFn_vtable = {
 	invoke0AFn,		// invoke0
 	invoke1Keyword,	// invoke1
 	invoke2Keyword,	// invoke2
@@ -40,25 +40,29 @@ interfaces Keyword_interfaces = {
 	NULL,					// IMapFns
 };
 
-const Keyword _arglistsKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_arglistsSymbol};
+const Keyword _arglistsKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_arglistsSymbol};
 const Keyword *const arglistsKW = &_arglistsKW;
-const Keyword _ConstKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_ConstSymbol};
+const Keyword _ColumnKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_ColumnSymbol};
+const Keyword *const ColumnKW = &_ColumnKW;
+const Keyword _ConstKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_ConstSymbol};
 const Keyword *const ConstKW = &_ConstKW;
-const Keyword _DocKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_DocSymbol};
+const Keyword _DocKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_DocSymbol};
 const Keyword *const DocKW = &_DocKW;
-const Keyword _DynamicKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_DynamicSymbol};
+const Keyword _DynamicKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_DynamicSymbol};
 const Keyword *const DynamicKW = &_DynamicKW;
-const Keyword _FileKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_FileSymbol};
+const Keyword _FileKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_FileSymbol};
 const Keyword *const FileKW = &_FileKW;
-const Keyword _macroKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_macroSymbol};
+const Keyword _LineKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_LineSymbol};
+const Keyword *const LineKW = &_LineKW;
+const Keyword _macroKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_macroSymbol};
 const Keyword *const macroKW = &_macroKW;
-const Keyword _privateKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_privateSymbol};
+const Keyword _privateKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_privateSymbol};
 const Keyword *const privateKW = &_privateKW;
-const Keyword _tagKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, NULL, EqualsKeyword, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_tagSymbol};
+const Keyword _tagKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBase, (IMap*) &_EmptyHashMap, &Keyword_interfaces}, &_tagSymbol};
 const Keyword *const tagKW = &_tagKW;
 
 const Keyword *internKeyword(const Symbol *s) {
-	const lisp_object *obj = Cache->obj.fns->IMapFns->entryAt(Cache, (lisp_object*) s);
+	const lisp_object *obj = Cache->obj.fns->IMapFns->entryAt(Cache, (lisp_object*) s)->val;
 	if(obj) {
 		assert(obj->type == KEYWORD_type);
 		return (const Keyword*) obj;
@@ -85,7 +89,7 @@ const char *getNamespaceKeyword(const Keyword *k) {
 }
 
 const Keyword *findKeyword(const Symbol *s) {
-	const lisp_object *ret = Cache->obj.fns->IMapFns->entryAt(Cache, (const lisp_object*)s);
+	const lisp_object *ret = Cache->obj.fns->IMapFns->entryAt(Cache, (const lisp_object*)s)->val;
 	if(ret == NULL)
 		return NULL;
 	assert(ret->type == KEYWORD_type);
@@ -111,8 +115,7 @@ static const Keyword* NewKeyword(const Symbol* s) {
 	ret->obj.type = KEYWORD_type;
 	ret->obj.size = sizeof(Keyword);
 	ret->obj.toString = toStringKeyword;
-	ret->obj.copy = NULL;	// TODO
-	ret->obj.Equals = EqualsKeyword;
+	ret->obj.Equals = EqualBase;
 	ret->obj.fns = &Keyword_interfaces;
 	ret->sym = s;
 
@@ -137,9 +140,4 @@ static const char *toStringKeyword(const lisp_object *obj) {
 	const lisp_object *s = (lisp_object*)k->sym;
 	AddString(sw, s->toString(s));
 	return WriteString(sw);
-}
-
-static bool EqualsKeyword(const lisp_object *x, const lisp_object *y) {
-	// TODO EqualsKeyword
-	return EqualBase(x, y);
 }

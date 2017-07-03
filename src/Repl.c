@@ -1,6 +1,7 @@
 #include "Repl.h"
 
 #include <assert.h>
+#include <stdio.h>
 
 #include "LispObject.h"
 #include "Compiler.h"
@@ -8,7 +9,7 @@
 
 static void HandleTopLevelExpression(const lisp_object *const current);
 
-void repl(FILE *input) {
+void repl(LineNumberReader *input) {
     for(;;) {
         printf("Lisp>");
         const lisp_object *current = read(input, false, '\0');

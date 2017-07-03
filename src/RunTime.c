@@ -1,6 +1,7 @@
 #include "RunTime.h"
 
 #include <string.h>
+#include <stdio.h>	// For Debugging.
 
 #include "AFn.h"
 #include "Compiler.h"
@@ -8,6 +9,8 @@
 #include "gc.h"
 #include "Keyword.h"
 #include "List.h"
+#include "LineNumberReader.h"
+#include "lisp_pthread.h"
 #include "Map.h"
 #include "Reader.h"
 #include "Strings.h"
@@ -26,7 +29,7 @@ static void load(const char *scriptbase, bool failIfNotFound);
 static void loadResourceScript(char *name, bool failIfNotFound);
 
 static const lisp_object *invokeBootNS(const IFn *self, const lisp_object *__form, const lisp_object *__env, const lisp_object *arg1);
-IFn_vtable bootNS_IFn_vtable = {
+const IFn_vtable bootNS_IFn_vtable = {
 	invoke0AFn,		// invoke0
 	invoke1AFn,		// invoke1
 	invoke2AFn,		// invoke2
@@ -45,10 +48,10 @@ interfaces bootNS_interfaces = {
 	NULL,				// IVectorFns
 	NULL,				// IMapFns
 };
-const IFn bootNS = {{IFN_type, sizeof(IFn), NULL, NULL, NULL, (IMap*)&_EmptyHashMap, &bootNS_interfaces}};
+const IFn bootNS = {{IFN_type, sizeof(IFn), NULL, NULL, (IMap*)&_EmptyHashMap, &bootNS_interfaces}};
 
 static const lisp_object *invokeInNS(const IFn *self, const lisp_object *arg1);
-IFn_vtable InNS_IFn_vtable = {
+const IFn_vtable InNS_IFn_vtable = {
 	invoke0AFn,	// invoke0
 	invokeInNS,	// invoke1
 	invoke2AFn,	// invoke2
@@ -67,10 +70,10 @@ interfaces InNS_interfaces = {
 	NULL,				// IVectorFns
 	NULL,				// IMapFns
 };
-const IFn InNS = {{IFN_type, sizeof(IFn), NULL, NULL, NULL, (IMap*)&_EmptyHashMap, &InNS_interfaces}};
+const IFn InNS = {{IFN_type, sizeof(IFn), NULL, NULL, (IMap*)&_EmptyHashMap, &InNS_interfaces}};
 
 static const lisp_object *invokeLoadFile(const IFn *self, const lisp_object *arg1);
-IFn_vtable LoadFile_IFn_vtable = {
+const IFn_vtable LoadFile_IFn_vtable = {
 	invoke0AFn,		// invoke0
 	invokeLoadFile,	// invoke1
 	invoke2AFn,		// invoke2
@@ -89,7 +92,7 @@ interfaces LoadFile_interfaces = {
 	NULL,					// IVectorFns
 	NULL,					// IMapFns
 };
-const IFn LoadFile = {{IFN_type, sizeof(IFn), NULL, NULL, NULL, (IMap*)&_EmptyHashMap, &LoadFile_interfaces}};
+const IFn LoadFile = {{IFN_type, sizeof(IFn), NULL, NULL, (IMap*)&_EmptyHashMap, &LoadFile_interfaces}};
 
 const Var* RTVar(const char *ns, const char *name) {
 	return internVar(findOrCreateNS(internSymbol2(NULL, ns)), internSymbol2(NULL, name), NULL, true);
@@ -129,6 +132,15 @@ void initRT(void) {
 	fflush(stdout);
     init_reader();
 	load("lisp/core", true);
+}
+
+static int id = 1;
+static pthread_mutex_t id_mutex = PTHREAD_MUTEX_INITIALIZER;
+int nextID(void) {
+	pthread_mutex_lock(&id_mutex);
+	id++;
+	pthread_mutex_unlock(&id_mutex);
+	return id;
 }
 
 static const lisp_object *invokeBootNS(const IFn *self, __attribute__((unused)) const lisp_object *__form, __attribute__((unused)) const lisp_object *__env, const lisp_object *arg1) {
@@ -176,7 +188,7 @@ static void load(const char *scriptbase, bool failIfNotFound) {
 }
 
 static void loadResourceScript(char *name, bool failIfNotFound) {
-	FILE *in = fopen(name, "r");
+	LineNumberReader *in = NewLineNumberReader(name);
 	char *file = name;
 	for(char *ptr = strchr(file, '/'); ptr != NULL; ptr = strchr(file, '/'))
 		file = ptr + 1;
@@ -186,7 +198,7 @@ static void loadResourceScript(char *name, bool failIfNotFound) {
 			fflush(stdout);
 			compilerLoad(in, name, file);
 		FINALLY
-			fclose(in);
+			closeLineNumberReader(in);
 		ENDTRY
 	} else if(failIfNotFound) {
 		StringWriter *sw = NewStringWriter();

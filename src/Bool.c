@@ -14,9 +14,9 @@ struct Bool_struct {
 static const char* toStringTrue(const lisp_object *obj);
 static const char* toStringFalse(const lisp_object *obj);
 
-const Bool _True =  {{BOOL_type, sizeof(Bool), toStringTrue, NULL, EqualBase, NULL, &NullInterface}, true};
+const Bool _True =  {{BOOL_type, sizeof(Bool), toStringTrue, EqualBase, NULL, &NullInterface}, true};
 const Bool *const True = &_True;
-const Bool _False =  {{BOOL_type, sizeof(Bool), toStringFalse, NULL, EqualBase, NULL, &NullInterface}, false};
+const Bool _False =  {{BOOL_type, sizeof(Bool), toStringFalse, EqualBase, NULL, &NullInterface}, false};
 const Bool *const False = &_False;
 
 static const char* toStringTrue(const lisp_object *obj) {

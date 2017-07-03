@@ -3,9 +3,9 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stdio.h>
 
 #include "LispObject.h"
+#include "MapEntry.h"
 
 // Interfaces
 
@@ -88,14 +88,15 @@ struct IVector_vtable_struct {
 	const IVector* (*assocN)(const IVector*, size_t, const lisp_object*);
 	const IVector* (*cons)(const IVector*, const lisp_object*);
 	const IVector* (*assoc)(const IVector*, const lisp_object*, const lisp_object*);
-	const lisp_object* (*entryAt)(const IVector*, const lisp_object*);
+	const MapEntry* (*entryAt)(const IVector*, const lisp_object*);
 	const lisp_object* (*nth)(const IVector*, size_t n, const lisp_object *NotFound);
 };
 
 struct IMap_vtable_struct {
+	bool (*containsKey)(const IMap*, const lisp_object*);
 	const IMap* (*assoc)(const IMap*, const lisp_object*, const lisp_object*);
 	const IMap* (*without)(const IMap*, const lisp_object*);
-	const lisp_object* (*entryAt)(const IMap*, const lisp_object*);
+	const MapEntry* (*entryAt)(const IMap*, const lisp_object*);
 	const IMap* (*cons)(const IMap*, const lisp_object*);
 };
 

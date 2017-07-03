@@ -25,19 +25,12 @@ static const char *IntegerToString(const lisp_object *obj) {
     return IntObj->str;
 }
 
-static const lisp_object *IntegerCopy(const lisp_object *obj) {
-    assert(obj->type == INTEGER_type);
-    Integer *IntObj = (Integer*)obj;
-    return (lisp_object*)NewInteger(IntObj->val);
-}
-
 Integer *NewInteger(long i) {
     Integer *ret = GC_MALLOC(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = INTEGER_type;
 	ret->obj.toString = IntegerToString;
-    ret->obj.copy = IntegerCopy;
 	ret->obj.fns = &NullInterface;
 
     ret->val = i;
@@ -68,19 +61,12 @@ static const char *FloatToString(const lisp_object *obj) {
     return FltObj->str;
 }
 
-static const lisp_object *FloatCopy(const lisp_object *obj) {
-    assert(obj->type == FLOAT_type);
-    Float *FltObj = (Float*)obj;
-    return (lisp_object*)NewFloat(FltObj->val);
-}
-
 Float *NewFloat(double x) {
     Float *ret = GC_MALLOC(sizeof(*ret));
     memset(ret, 0, sizeof(*ret));
 
     ret->obj.type = FLOAT_type;
 	ret->obj.toString = FloatToString;
-    ret->obj.copy = FloatCopy;
 	ret->obj.fns = &NullInterface;
 
     ret->val = x;

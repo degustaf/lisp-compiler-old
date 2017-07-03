@@ -1,5 +1,8 @@
 #include "Var.h"
 
+#include <stdio.h>	// For Debugging.
+
+#include "AFn.h"
 #include "ARef.h"
 #include "Bool.h"
 #include "Error.h"
@@ -7,7 +10,6 @@
 #include "Interfaces.h"
 #include "Keyword.h"
 #include "Map.h"
-#include "pthread.h"
 #include "StringWriter.h"
 #include "Util.h"
 
@@ -25,14 +27,14 @@ typedef struct {
 static const Unbound *NewUnbound(const Var *v);
 static const char *toStringUnbound(const lisp_object *obj);
 
-IFn_vtable Unbound_IFn_vtable = {
-	NULL,	// invoke0	// TODO
-	NULL,		// invoke1	// TODO
-	NULL,		// invoke2	// TODO
-	NULL,	// invoke3	// TODO
-	NULL,	// invoke4	// TODO
-	NULL,	// invoke5	// TODO
-	NULL,		// applyTo	// TODO
+const IFn_vtable Unbound_IFn_vtable = {
+	invoke0AFn,
+	invoke1AFn,
+	invoke2AFn,
+	invoke3AFn,
+	invoke4AFn,
+	invoke5AFn,
+	applyToAFn,
 };
 
 interfaces Unbound_interfaces = {
@@ -87,14 +89,14 @@ static const lisp_object* invoke5Var(const IFn*, const lisp_object*, const lisp_
 static const lisp_object* applyToVar(const IFn*, const ISeq*);
 static const char* toStringVar(const lisp_object *obj);
 
-IFn_vtable Var_IFn_vtable = {
-	invoke0Var,	// invoke0
-	invoke1Var,	// invoke1
-	invoke2Var,	// invoke2
-	invoke3Var,	// invoke3
-	invoke4Var,	// invoke4
-	invoke5Var,	// invoke5
-	applyToVar,	// applyTo
+const IFn_vtable Var_IFn_vtable = {
+	invoke0Var,
+	invoke1Var,
+	invoke2Var,
+	invoke3Var,
+	invoke4Var,
+	invoke5Var,
+	applyToVar,
 };
 
 interfaces Var_interfaces = {
@@ -114,7 +116,6 @@ static const Unbound *NewUnbound(const Var *v) {
 	Unbound *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = UNBOUND_type;
 	ret->obj.toString = toStringUnbound;
-	ret->obj.copy = NULL;	// TODO
 	ret->obj.fns = &Unbound_interfaces;
 
 	ret->v = v;
@@ -152,7 +153,6 @@ Var* NewVar(const Namespace *ns, const Symbol *sym, const lisp_object *root) {
 
 	ret->obj.type = VAR_type;
 	ret->obj.toString = toStringVar;
-	ret->obj.copy = NULL;		// TODO
 	ret->obj.meta = (IMap*) EmptyHashMap;
 	ret->obj.fns = &Var_interfaces;
 
@@ -184,7 +184,7 @@ Var* createVar(const lisp_object* root) {
 
 const lisp_object *getTag(const Var *v) {
 	const IMap *m = v->obj.meta;
-	return m->obj.fns->IMapFns->entryAt(m, (lisp_object*)tagKW);
+	return m->obj.fns->IMapFns->entryAt(m, (lisp_object*)tagKW)->val;
 }
 
 const lisp_object *getVar(const Var *v) {

@@ -4,6 +4,7 @@
 #include "unity.h"
 
 #include "gc.h"
+#include "LineNumberReader.h"
 #include "Reader.h"
 #include "Util.h"
 
@@ -72,11 +73,11 @@ void test_read_integer(void) {
 
     for(size_t i=0; i<count; i++) {
         test_data *d = &(data[i]);
-        FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+        LineNumberReader *stream = MemOpenLineNumberReader(d->input, strlen(d->input));
         const lisp_object *ret = read(stream, false, '\0');
         const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
-        fclose(stream);
+        closeLineNumberReader(stream);
     }
 }
 
@@ -127,11 +128,11 @@ void test_read_float(void) {
 
     for(size_t i=0; i<count; i++) {
         test_data *d = &(data[i]);
-        FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+        LineNumberReader *stream = MemOpenLineNumberReader(d->input, strlen(d->input));
         const lisp_object *ret = read(stream, false, '\0');
         const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
-        fclose(stream);
+        closeLineNumberReader(stream);
     }
 }
 
@@ -240,11 +241,11 @@ void test_read_char(void) {
 
     for(size_t i=0; i<count; i++) {
         test_data *d = &(data[i]);
-        FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+        LineNumberReader *stream = MemOpenLineNumberReader(d->input, strlen(d->input));
         const lisp_object *ret = read(stream, false, '\0');
         const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
-        fclose(stream);
+        closeLineNumberReader(stream);
     }
 }
 
@@ -257,11 +258,11 @@ void test_read_string(void) {
 
     for(size_t i=0; i<count; i++) {
         test_data *d = &(data[i]);
-        FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+        LineNumberReader *stream = MemOpenLineNumberReader(d->input, strlen(d->input));
         const lisp_object *ret = read(stream, false, '\0');
         const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
-        fclose(stream);
+        closeLineNumberReader(stream);
     }
 }
 
@@ -279,12 +280,12 @@ void test_read_list(void) {
 
     for(size_t i=0; i<count; i++) {
         test_data *d = &(data[i]);
-        FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+        LineNumberReader *stream = MemOpenLineNumberReader(d->input, strlen(d->input));
         const lisp_object *ret = read(stream, false, '\0');
 		TEST_ASSERT_MESSAGE(ret->type == LIST_type, msg(err, 256, "Expected List type.  Got %s.", object_type_string[ret->type]));
         const char *result = toString(ret);
         TEST_ASSERT_EQUAL_STRING(d->expected, result);
-        fclose(stream);
+        closeLineNumberReader(stream);
     }
 }
 
@@ -306,12 +307,12 @@ void test_read_vector(void) {
 
 	for(size_t i=0; i<count; i++) {
 		test_data *d = &(data[i]);
-		FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+		LineNumberReader *stream = MemOpenLineNumberReader(d->input, strlen(d->input));
 		const lisp_object *ret = read(stream, false, '\0');
 		TEST_ASSERT_MESSAGE(ret->type == VECTOR_type, msg(err, 256, "Expected Vector type.  Got %s.", object_type_string[ret->type]));
 		const char *result = toString(ret);
 		TEST_ASSERT_EQUAL_STRING(d->expected, result);
-		fclose(stream);
+		closeLineNumberReader(stream);
 	}
 }
 
@@ -331,7 +332,7 @@ void test_read_map(void) {
 
 	for(size_t i=0; i<count; i++) {
 		test_data *d = &(data[i]);
-		FILE *stream = fmemopen(d->input, strlen(d->input), "r");
+		LineNumberReader *stream = MemOpenLineNumberReader(d->input, strlen(d->input));
 		const lisp_object *ret = read(stream, false, '\0');
 		TEST_ASSERT_MESSAGE(ret->type == HASHMAP_type, msg(err, 256, "Expected Map type.  Got %s.", object_type_string[ret->type]));
 		const char *result = toString(ret);
@@ -341,7 +342,7 @@ void test_read_map(void) {
 		for(char *tok = strtok(expected_loc, ","); tok != NULL; tok = strtok(NULL, ",")) {
 			TEST_ASSERT_NOT_NULL_MESSAGE(strstr(result, tok), msg(err, 256, "Could not find %s in %s.", tok, result));
 		}
-		fclose(stream);
+		closeLineNumberReader(stream);
 	}
 }
 

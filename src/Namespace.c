@@ -1,5 +1,7 @@
 #include "Namespace.h"
 
+#include <stdio.h>	// For Debugging.
+
 #include "Error.h"
 #include "gc.h"
 #include "Interfaces.h"
@@ -19,13 +21,13 @@ static Namespace *NewNamespace(const Symbol *s);
 static const char *toStringNamespace(const lisp_object *);
 
 Namespace *findNS(const Symbol *s) {
-	const lisp_object *ret = namespaces->obj.fns->IMapFns->entryAt(namespaces, (lisp_object*)s);
+	const lisp_object *ret = namespaces->obj.fns->IMapFns->entryAt(namespaces, (lisp_object*)s)->val;
 	assert(ret->type == NAMESPACE_type);
 	return (Namespace*)ret;
 }
 
 Namespace *findOrCreateNS(const Symbol *s) {
-	const lisp_object *obj = namespaces->obj.fns->IMapFns->entryAt(namespaces, (const lisp_object*)s);
+	const lisp_object *obj = namespaces->obj.fns->IMapFns->entryAt(namespaces, (const lisp_object*)s)->val;
 	if(obj != NULL) {
 		assert(obj->type == NAMESPACE_type);
 		return (Namespace*) obj;
@@ -37,7 +39,7 @@ Namespace *findOrCreateNS(const Symbol *s) {
 
 Namespace *lookupAlias(Namespace *ns, const Symbol *alias) {
 	const IMap *map = ns->aliases;
-	const lisp_object *ret = map->obj.fns->IMapFns->entryAt(map, (lisp_object*)alias);
+	const lisp_object *ret = map->obj.fns->IMapFns->entryAt(map, (lisp_object*)alias)->val;
 	assert(ret->type == NAMESPACE_type);
 	return (Namespace*)ret;
 }
@@ -77,7 +79,7 @@ Var *internNS(Namespace *ns, const Symbol *s) {
 	}
 	const IMap *map = ns->mappings;
 	const lisp_object *o = NULL;
-	if((o = map->obj.fns->IMapFns->entryAt(map, (const lisp_object*)s)))
+	if((o = map->obj.fns->IMapFns->entryAt(map, (const lisp_object*)s)->val))
 		return (Var*) o;
 	Var *v = NewVar(ns, s, NULL);
 	ns->mappings = map->obj.fns->IMapFns->assoc(map, (const lisp_object*)s, (const lisp_object*)v);
@@ -86,7 +88,7 @@ Var *internNS(Namespace *ns, const Symbol *s) {
 
 Var *findInternedVar(const Namespace *ns, const Symbol *s) {
 	const IMap *map = ns->mappings;
-	const lisp_object *obj = map->obj.fns->IMapFns->entryAt(map, (lisp_object*)s);
+	const lisp_object *obj = map->obj.fns->IMapFns->entryAt(map, (lisp_object*)s)->val;
 	if(obj && (obj->type == VAR_type)) {
 		Var *ret = (Var*)obj;
 	   	if(getNamespaceVar(ret) == ns)
@@ -97,14 +99,13 @@ Var *findInternedVar(const Namespace *ns, const Symbol *s) {
 
 const lisp_object* getMapping(const Namespace *ns, const Symbol *s) {
 	const IMap *m = ns->mappings;
-	return m->obj.fns->IMapFns->entryAt(m, (lisp_object*)s);
+	return m->obj.fns->IMapFns->entryAt(m, (lisp_object*)s)->val;
 }
 
 static Namespace *NewNamespace(const Symbol *s) {
 	Namespace *ret = GC_MALLOC(sizeof(*ret));
 	ret->obj.type = NAMESPACE_type;
 	ret->obj.toString = toStringNamespace;
-	ret->obj.copy = NULL;	// TODO
 	ret->obj.fns = &NullInterface;
 	ret->name = s;
 	ret->mappings = (IMap*) EmptyHashMap;	// TODO This should be DEFAULT_IMPORTS.

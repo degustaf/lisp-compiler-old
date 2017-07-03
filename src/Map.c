@@ -13,6 +13,7 @@
 #include "Interfaces.h"
 #include "intrinsics.h"
 #include "lisp_pthread.h"
+#include "MapEntry.h"
 #include "nodes.h"
 #include "Numbers.h"
 #include "Util.h"
@@ -49,7 +50,7 @@ typedef struct {	// INode_vtable
 
 struct INode_struct {
 	lisp_object obj;
-	INode_vtable *fns;
+	const INode_vtable *fns;
 };
 
 // INode function declarations.
@@ -60,7 +61,7 @@ static const INode* createNode(bool edit, pthread_t thread_id, size_t shift, con
 
 typedef struct {
 	lisp_object obj;
-	INode_vtable *fns;
+	const INode_vtable *fns;
 	uint32_t bitmap;
 	bool edit;
 	pthread_t thread_id;
@@ -75,23 +76,23 @@ const INode* without_BitmapIndexed_Node(const INode *node, size_t shift, uint32_
 const MapEntry* find_BitmapIndexed_Node(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
 const ISeq* nodeSeq_BitmapIndexed_Node(const INode *node);
 
-INode_vtable BMINode_vtable = {
+const INode_vtable BMINode_vtable = {
 	assocBitmapIndexed_Node,	// assoc
-	NULL,						// assoc_thread
+	NULL,						// assoc_thread	// TODO
 	without_BitmapIndexed_Node,	// without
-	NULL,						// without_thread
+	NULL,						// without_thread	// TODO
 	find_BitmapIndexed_Node,	// find
 	nodeSeq_BitmapIndexed_Node	// nodeSeq
 };
 
-BitmapIndexedNode _EmptyBMINode = {{BMI_NODE_type, sizeof(BitmapIndexedNode), NULL, NULL, NULL, NULL, NULL}, &BMINode_vtable, 0, false, (pthread_t)NULL, 0, };
+BitmapIndexedNode _EmptyBMINode = {{BMI_NODE_type, sizeof(BitmapIndexedNode), NULL, NULL, NULL, NULL}, &BMINode_vtable, 0, false, (pthread_t)NULL, 0, };
 BitmapIndexedNode *EmptyBMINode = &_EmptyBMINode;
 
 // ArrayNode
 
 typedef struct {
 	lisp_object obj;
-	INode_vtable *fns;
+	const INode_vtable *fns;
 	bool edit;
 	pthread_t thread_id;
 	size_t count;
@@ -107,11 +108,11 @@ const INode* withoutArrayNode(const INode *node, size_t shift, uint32_t hash, co
 const MapEntry* findArrayNode(const INode *node, size_t shift, uint32_t hash, const lisp_object *key);
 const ISeq* nodeSeq_ArrayNode(const INode *node);
 
-INode_vtable ArrayNode_vtable = {
+const INode_vtable ArrayNode_vtable = {
 	assocArrayNode,		// assoc
-	NULL,				// assoc_thread
+	NULL,				// assoc_thread	// TODO
 	withoutArrayNode,	// without
-	NULL,				// without_thread
+	NULL,				// without_thread	// TODO
 	findArrayNode,		// find
 	nodeSeq_ArrayNode	// nodeSeq
 };
@@ -120,7 +121,7 @@ INode_vtable ArrayNode_vtable = {
 
 typedef struct {	// CollisionNode
 	lisp_object obj;
-	INode_vtable *fns;
+	const INode_vtable *fns;
 	uint32_t hash;
 	size_t count;
 	bool edit;
@@ -137,11 +138,11 @@ static const MapEntry* findCollisionNode(const INode *node, size_t shift, uint32
 static const ISeq* nodeSeqCollisionNode(const INode *node);
 static int findIndex(const CollisionNode *cnode, const lisp_object *key);
 
-INode_vtable CollisionNode_vtable = {
+const INode_vtable CollisionNode_vtable = {
 	assocCollisionNode,		// assoc
-	NULL,					// assoc_thread
+	NULL,					// assoc_thread	// TODO
 	withoutCollisionNode,	// without
-	NULL,					// without_thread
+	NULL,					// without_thread	// TODO
 	findCollisionNode,		// find
 	nodeSeqCollisionNode	// nodeSeq
 };
@@ -162,18 +163,18 @@ const NodeSeq *CreateNodeSeq(const lisp_object **array, size_t count, size_t i, 
 const lisp_object* firstNodeSeq(const ISeq*);
 const ISeq* nextNodeSeq(const ISeq*);
 
-Seqable_vtable NodeSeq_Seqable_vtable = {
+const Seqable_vtable NodeSeq_Seqable_vtable = {
 	seqASeq,	//seq
 };
 
-ICollection_vtable NodeSeq_ICollection_vtable = {
+const ICollection_vtable NodeSeq_ICollection_vtable = {
 	countASeq,					// count
 	(ICollectionFn1)consASeq,	// cons
 	emptyASeq,					// empty
 	EquivASeq					// Equiv
 };
 
-ISeq_vtable NodeSeq_ISeq_vtable = {
+const ISeq_vtable NodeSeq_ISeq_vtable = {
 	firstNodeSeq,	// first
 	nextNodeSeq,	// next
 	moreASeq,		// more
@@ -206,7 +207,7 @@ const ArrayNodeSeq *CreateArrayNodeSeq(const INode **array, size_t i, const ISeq
 const lisp_object* firstArrayNodeSeq(const ISeq*);
 const ISeq* nextArrayNodeSeq(const ISeq*);
 
-ISeq_vtable ArrayNodeSeq_ISeq_vtable = {
+const ISeq_vtable ArrayNodeSeq_ISeq_vtable = {
 	firstArrayNodeSeq,	// first
 	nextArrayNodeSeq,	// next
 	moreASeq,			// more
@@ -261,38 +262,42 @@ const ISeq *seqHashMap(const Seqable *obj);
 static size_t countHashMap(const ICollection *ic);
 static const ICollection* emptyHashMap(void);
 static bool EquivHashMap(const ICollection*, const lisp_object*);
+static const lisp_object* invoke1HashMap(const IFn*, const lisp_object*);
+static const lisp_object* invoke2HashMap(const IFn*, const lisp_object*, const lisp_object*);
+static bool containsKeyHashMap(const IMap*, const lisp_object*);
 static const IMap* assocHashMap(const IMap*, const lisp_object*, const lisp_object*);
 static const IMap* withoutHashMap(const IMap*, const lisp_object*);
-static const lisp_object* entryAtHashMap(const IMap*, const lisp_object*);
+static const MapEntry* entryAtHashMap(const IMap*, const lisp_object*);
 static const IMap* consHashMap(const IMap*, const lisp_object*);
 static bool EqualsHashMap(const lisp_object *x, const lisp_object *y);
 
-Seqable_vtable HashMap_Seqable_vtable = {
+const Seqable_vtable HashMap_Seqable_vtable = {
 	seqHashMap // seq
 };
 
-ICollection_vtable HashMap_ICollection_vtable = {
+const ICollection_vtable HashMap_ICollection_vtable = {
 	countHashMap,					// count
 	(ICollectionFn1)consHashMap,	// cons
 	emptyHashMap,					// empty
 	EquivHashMap,					// Equiv	
 };
 
-IFn_vtable HashMap_IFn_vtable = {
-	invoke0AFn,	// invoke0
-	NULL,		// invoke1	// TODO
-	NULL,		// invoke2	// TODO
-	invoke3AFn,	// invoke3
-	invoke4AFn,	// invoke4
-	invoke5AFn,	// invoke5
-	applyToAFn,	// applyTo
+const IFn_vtable HashMap_IFn_vtable = {
+	invoke0AFn,		// invoke0
+	invoke1HashMap,	// invoke1
+	invoke2HashMap,	// invoke2
+	invoke3AFn,		// invoke3
+	invoke4AFn,		// invoke4
+	invoke5AFn,		// invoke5
+	applyToAFn,		// applyTo
 };
 
-IMap_vtable HashMap_IMap_vtable = {
-	assocHashMap,	// assoc
-	withoutHashMap,	// without
-	entryAtHashMap,	// entryAt
-	consHashMap,	// cons	
+const IMap_vtable HashMap_IMap_vtable = {
+	containsKeyHashMap,	// containsKey
+	assocHashMap,		// assoc
+	withoutHashMap,		// without
+	entryAtHashMap,		// entryAt
+	consHashMap,		// cons	
 };
 
 interfaces HashMap_interfaces = {
@@ -306,7 +311,7 @@ interfaces HashMap_interfaces = {
 	&HashMap_IMap_vtable,			// IMapFns
 };
 
-const HashMap _EmptyHashMap = {{HASHMAP_type, sizeof(HashMap), toString, NULL, EqualsHashMap, (IMap*)&_EmptyHashMap, &HashMap_interfaces}, 0, NULL, false, NULL};
+const HashMap _EmptyHashMap = {{HASHMAP_type, sizeof(HashMap), toString, EqualsHashMap, (IMap*)&_EmptyHashMap, &HashMap_interfaces}, 0, NULL, false, NULL};
 const HashMap *const EmptyHashMap = &_EmptyHashMap;
 
 // INode Function Definitions
@@ -839,7 +844,7 @@ static bool EquivHashMap(const ICollection *ic, const lisp_object *obj) {
 
 	for(const ISeq *s = seqHashMap((const Seqable*)hm); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
 		const MapEntry *me =(const MapEntry*) s->obj.fns->ISeqFns->first(s);
-		const lisp_object *val = im->obj.fns->IMapFns->entryAt(im, me->key);
+		const lisp_object *val = im->obj.fns->IMapFns->entryAt(im, me->key)->val;
 		if(!Equiv(val, me->val)) return false;
 	}
 
@@ -847,10 +852,33 @@ static bool EquivHashMap(const ICollection *ic, const lisp_object *obj) {
 
 }
 
+static const lisp_object* invoke1HashMap(const IFn *f, const lisp_object *key) {
+	assert(f->obj.type == HASHMAP_type);
+	return invoke2HashMap(f, key, NULL);
+}
+
+static const lisp_object* invoke2HashMap(const IFn *f, const lisp_object *key, const lisp_object *NotFound) {
+	assert(f->obj.type == HASHMAP_type);
+	const HashMap *hm = (HashMap*) f;
+
+	if(key == NULL)
+		return hm->hasNull ? hm->nullValue : NotFound;
+	return hm->root ? hm->root->fns->find(hm->root, 0, HashEq(key), key)->val : NotFound;
+}
+
 static size_t countHashMap(const ICollection *ic) {
 	assert(ic->obj.type == HASHMAP_type);
 	const HashMap *hm = (const HashMap*) ic;
 	return hm->count;
+}
+
+static bool containsKeyHashMap(const IMap *im, const lisp_object *key) {
+	assert(im->obj.type == HASHMAP_type);
+	const HashMap *hm = (HashMap*)im;
+
+	if(key == NULL)
+		return hm->hasNull;
+	return hm->root ? hm->root->fns->find(hm->root, 0, HashEq(key), key) == NULL : false;
 }
 
 static const IMap* assocHashMap(const IMap *im, const lisp_object *key, const lisp_object *val) {
@@ -885,14 +913,14 @@ static const IMap* withoutHashMap(const IMap *im, const lisp_object *key) {
 	return (IMap*) NewHashMap(hm->count - 1, newRoot, hm->hasNull, hm->nullValue);
 }
 
-static const lisp_object* entryAtHashMap(const IMap *im, const lisp_object *key) {
+static const MapEntry* entryAtHashMap(const IMap *im, const lisp_object *key) {
 	assert(im->obj.type == HASHMAP_type);
 	const HashMap *hm = (const HashMap*) im;
 
 	if(key == NULL)
-		return hm->hasNull ? hm->nullValue : NULL;
+		return hm->hasNull ? NewMapEntry(NULL, hm->nullValue) : NULL;
 
-	return hm->root ? (lisp_object*) hm->root->fns->find(hm->root, 0, HashEq(key), key) : NULL;
+	return hm->root ? hm->root->fns->find(hm->root, 0, HashEq(key), key) : NULL;
 }
 
 static const IMap* consHashMap(const IMap *im, const lisp_object *obj) {
@@ -917,6 +945,22 @@ static const IMap* consHashMap(const IMap *im, const lisp_object *obj) {
 }
 
 static bool EqualsHashMap(const lisp_object *x, const lisp_object *y) {
-	// TODO EqualsHashMap
-	return EqualBase(x, y);
+	assert(x->type == HASHMAP_type);
+	const HashMap *hm = (HashMap*)x;
+	if(x == y)
+		return true;
+	if(!isIMap(y))
+		return false;
+	const IMap *im = (IMap*) y;
+
+	if(countHashMap((ICollection*)hm) != im->obj.fns->ICollectionFns->count((ICollection*)im))
+		return false;
+
+	for(const ISeq *s = im->obj.fns->SeqableFns->seq((Seqable*)im); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
+		const MapEntry *e = (MapEntry*) s->obj.fns->ISeqFns->first(s);
+		const MapEntry *me = entryAtHashMap((IMap*)hm, e->key);
+		if(me == NULL || !Equals(e->val, me->val))
+			return false;
+	}
+	return true;
 }

@@ -36,6 +36,7 @@
 	TYPE(BINDINGINIT_type) \
 \
 	/* Map types. */ \
+	TYPE(MAPENTRY_type) \
 	TYPE(BMI_NODE_type) \
 	TYPE(ARRAY_NODE_type) \
 	TYPE(COLLISIONNODE_type) \
@@ -43,11 +44,13 @@
 	TYPE(ARRAYNODESEQ_type) \
 	TYPE(HASHMAP_type) \
 	TYPE(TRANSIENTHASHMAP_type) \
+	TYPE(KEYSEQ_type) \
 \
 	/* Vector types. */ \
 	TYPE(VECTOR_type) \
 	TYPE(NODE_type) \
-	TYPE(CHUNKEDSEQ_type)\
+	TYPE(CHUNKEDSEQ_type) \
+	TYPE(RSEQ_type) \
 \
 	/* Interfaces. */ \
 	TYPE(ISEQ_interface)
@@ -71,14 +74,14 @@ typedef struct IVector_vtable_struct IVector_vtable;
 typedef struct IMap_vtable_struct IMap_vtable;
 
 typedef struct {
-	Seqable_vtable *SeqableFns;
-	Reversible_vtable *ReversibleFns;
-	ICollection_vtable *ICollectionFns;
-	IStack_vtable *IStackFns;
-	ISeq_vtable *ISeqFns;
-	IFn_vtable *IFnFns;
-	IVector_vtable *IVectorFns;
-	IMap_vtable *IMapFns;
+	const Seqable_vtable *SeqableFns;
+	const Reversible_vtable *ReversibleFns;
+	const ICollection_vtable *ICollectionFns;
+	const IStack_vtable *IStackFns;
+	const ISeq_vtable *ISeqFns;
+	const IFn_vtable *IFnFns;
+	const IVector_vtable *IVectorFns;
+	const IMap_vtable *IMapFns;
 } interfaces;
 
 static const interfaces NullInterface = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
@@ -89,7 +92,6 @@ typedef struct lisp_object_struct {
     object_type type;
 	size_t size;
 	const char *(*toString)(const struct lisp_object_struct *);
-    const struct lisp_object_struct* (*copy)(const struct lisp_object_struct *);
 	bool (*Equals)(const struct lisp_object_struct *x, const struct lisp_object_struct *y);
 	const IMap *meta;
 	const interfaces *fns;

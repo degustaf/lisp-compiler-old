@@ -52,6 +52,19 @@ bool EquivASeq(const ICollection *is, const lisp_object *obj) {
 	return ms == NULL;
 }
 
+bool EqualsASeq(const struct lisp_object_struct *x, const struct lisp_object_struct *y) {
+	assert(isISeq(x));
+	const ISeq *self = (ISeq*)x;
+	if(!isSeqable(y))
+		return false;
+	for(const ISeq *s = y->fns->SeqableFns->seq((Seqable*)y); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
+		if(self == NULL || !Equals(s->obj.fns->ISeqFns->first(s), self->obj.fns->ISeqFns->first(self)))
+			return false;
+		self = self->obj.fns->ISeqFns->next(self);
+	}
+	return self == NULL;
+}
+
 const ISeq* seqASeq(const Seqable *s) {
 	assert(isISeq(&s->obj));
 	return (ISeq*) s;
