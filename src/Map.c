@@ -843,9 +843,9 @@ static bool EquivHashMap(const ICollection *ic, const lisp_object *obj) {
 	if(im->obj.fns->ICollectionFns->count((const ICollection*)im) != hm->count) return false;
 
 	for(const ISeq *s = seqHashMap((const Seqable*)hm); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
-		const MapEntry *me =(const MapEntry*) s->obj.fns->ISeqFns->first(s);
-		const lisp_object *val = im->obj.fns->IMapFns->entryAt(im, me->key)->val;
-		if(!Equiv(val, me->val)) return false;
+		const MapEntry *me = (const MapEntry*) s->obj.fns->ISeqFns->first(s);
+		const MapEntry *me2 = im->obj.fns->IMapFns->entryAt(im, me->key);
+		if(me2 == NULL || !Equiv(me2->val, me->val)) return false;
 	}
 
 	return true;
@@ -863,7 +863,11 @@ static const lisp_object* invoke2HashMap(const IFn *f, const lisp_object *key, c
 
 	if(key == NULL)
 		return hm->hasNull ? hm->nullValue : NotFound;
-	return hm->root ? hm->root->fns->find(hm->root, 0, HashEq(key), key)->val : NotFound;
+	if(hm->root) {
+		const MapEntry *me = hm->root->fns->find(hm->root, 0, HashEq(key), key);
+		return me ? me->val : NotFound;
+	}
+	return NotFound;
 }
 
 static size_t countHashMap(const ICollection *ic) {

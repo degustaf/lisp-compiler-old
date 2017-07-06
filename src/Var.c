@@ -184,7 +184,8 @@ Var* createVar(const lisp_object* root) {
 
 const lisp_object *getTag(const Var *v) {
 	const IMap *m = v->obj.meta;
-	return m->obj.fns->IMapFns->entryAt(m, (lisp_object*)tagKW)->val;
+	const MapEntry *me = m->obj.fns->IMapFns->entryAt(m, (lisp_object*)tagKW);
+	return me ? me->val : NULL;
 }
 
 const lisp_object *getVar(const Var *v) {

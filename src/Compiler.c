@@ -1,9 +1,9 @@
 #include "Compiler.h"
 
 #include <ctype.h>
-#include <string.h>
-
+#include <dlfcn.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "Bool.h"
 #include "Error.h"
@@ -85,6 +85,7 @@ typedef enum {	// expr_type
 	IFEXPR_type,
 	RECUREXPR_type,
 	UNRESOLVEDVAREXPR_type,
+	STATICFIELDEXPR_type,
 } expr_type;
 
 #define EXPR_BASE \
@@ -949,7 +950,8 @@ static const lisp_object* EvalInvoke(const Expr *self) {
 
 static const lisp_object* sigTag(size_t argCount, const Var *v) {
 	const IMap *meta = ((lisp_object*)v)->meta;
-	const lisp_object *arglists = meta->obj.fns->IMapFns->entryAt(meta, (lisp_object*)arglistsKW)->val;
+	const MapEntry *me = meta->obj.fns->IMapFns->entryAt(meta, (lisp_object*)arglistsKW);
+	const lisp_object *arglists = me ? me->val : NULL;
 
 	for(const ISeq *s = seq(arglists); s != NULL; s = s->obj.fns->ISeqFns->next(s)) {
 		const Vector *sig = (Vector*)s->obj.fns->ISeqFns->first(s);
@@ -1012,7 +1014,8 @@ static const Expr* parseInvokeExpr(Expr_Context context, const ISeq *form) {
 	if((fexpr->type == VAREXPR_type) && (context != EVAL)) {
 		const Var *v = ((VarExpr*)fexpr)->v;
 		const IMap *vMeta = ((lisp_object*)v)->meta;
-		const lisp_object *arglist = vMeta->obj.fns->IMapFns->entryAt(vMeta, (lisp_object*)arglistsKW)->val;
+		const MapEntry *me = vMeta->obj.fns->IMapFns->entryAt(vMeta, (lisp_object*)arglistsKW);
+		const lisp_object *arglist = me ? me->val : NULL;
 		size_t arity = count((lisp_object*)form->obj.fns->ISeqFns->next(form));
 		for(const ISeq *s = seq(arglist); s != NULL; s->obj.fns->ISeqFns->next(s)) {
 			const IVector *args = (IVector*) s->obj.fns->ISeqFns->first(s);
@@ -1815,6 +1818,64 @@ static Expr* NewUnresolvedVarExpr(const Symbol *sym) {
 	return (Expr*)ret;
 }
 
+// StaticFieldExpr
+typedef struct {	// StaticFieldExpr
+	EXPR_BASE
+	const char *fieldname;
+	const lisp_object *item;
+	const Symbol *tag;
+	size_t line;
+	size_t column;
+} StaticFieldExpr;
+
+static const lisp_object* EvalStaticField(const Expr *self) {
+	assert(self->type == STATICFIELDEXPR_type);
+	return ((StaticFieldExpr*)self)->item;
+}
+
+static Expr* NewStaticFieldExpr(size_t line, size_t column, const char *fieldName, const Symbol *tag) {
+	StaticFieldExpr *ret = GC_MALLOC(sizeof(*ret));
+	ret->obj.type = EXPR_type;
+	ret->obj.fns = &NullInterface;
+	ret->type = STATICFIELDEXPR_type;
+	ret->Eval = EvalStaticField;
+
+	ret->fieldname = fieldName;
+	ret->tag = tag;
+	ret->line = line;
+	ret->column = column;
+
+	void *handle = dlopen(NULL, RTLD_LAZY | RTLD_GLOBAL);
+	if(handle == NULL) {
+		exception e = {CompilerException, dlerror()};
+		Raise(e);
+	}
+	lisp_object **sym = dlsym(handle, fieldName);
+	if(sym == NULL) {
+		exception e = {CompilerException, dlerror()};
+		Raise(e);
+	}
+	ret->item = *sym;
+	if(dlclose(handle)) {
+		exception e = {CompilerException, dlerror()};
+		Raise(e);
+	}
+
+	return (Expr*)ret;
+}
+
+static const Expr* parseHostExpr(Expr_Context context, const lisp_object *frm) {
+	assert(isISeq(frm));
+	const ISeq *form = (ISeq*)frm;
+	// (. fieldname-sym) or
+	// (. 0-ary-method)	// TODO
+	// (. methodname-sym args+)	// TODO
+	// (. (methodname-sym args?))	// TODO
+	
+	size_t line = lineDeref();
+	size_t column = columnDeref();
+}
+
 // IParser
 typedef const Expr* (*IParser)(Expr_Context context, const lisp_object *form);
 typedef struct {	// Special
@@ -1880,10 +1941,12 @@ static int registerConstant(const lisp_object *obj) {
 	if(!isBound(CONSTANTS))
 		return -1;
 	const IMap *ids = (IMap*) deref(CONSTANT_IDS);
-	const lisp_object *o = ids->obj.fns->IMapFns->entryAt(ids, obj)->val;
-	assert(o->type == INTEGER_type);
-	if(o)
+	const MapEntry *me = ids->obj.fns->IMapFns->entryAt(ids, obj);
+	const lisp_object *o = me ? me->val : NULL;
+	if(o) {
+		assert(o->type == INTEGER_type);
 		return IntegerValue((Integer*)o);
+	}
 
 	const IVector *v = (IVector*) deref(CONSTANTS);
 	setVar(CONSTANTS, (lisp_object*)v->obj.fns->IVectorFns->cons(v, o));
@@ -1896,7 +1959,8 @@ static const Expr* registerKeyword(const Keyword *kw) {
 	if(!isBound(KEYWORDS))
 		return NewKeywordExpr(kw);
 	const IMap *keywordsMap = (IMap*) deref(KEYWORDS);
-	const lisp_object *id = keywordsMap->obj.fns->IMapFns->entryAt(keywordsMap, (lisp_object*)kw)->val;
+	const MapEntry *me = keywordsMap->obj.fns->IMapFns->entryAt(keywordsMap, (lisp_object*)kw);
+	const lisp_object *id = me ? me->val : NULL;
 	if(id == NULL) {
 		setVar(KEYWORDS, (lisp_object*)keywordsMap->obj.fns->IMapFns->assoc(keywordsMap, (lisp_object*)kw, (lisp_object*)NewInteger(registerConstant((lisp_object*)kw))));
 	}

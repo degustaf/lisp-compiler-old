@@ -161,9 +161,11 @@ const lisp_object *get(const lisp_object *coll, const lisp_object *key, const li
 
 	const lisp_object *ret = NULL;
 	if(isIMap(coll)) {
-		ret = coll->fns->IMapFns->entryAt((IMap*)coll, key)->val;
+		const MapEntry *me = coll->fns->IMapFns->entryAt((IMap*)coll, key);
+		ret = me ? me->val : NULL;
 	} else if(isIVector(coll)) {
-		ret = coll->fns->IVectorFns->entryAt((IVector*)coll, key)->val;
+		const MapEntry *me = coll->fns->IVectorFns->entryAt((IVector*)coll, key);
+		ret = me ? me->val : NULL;
 	}
 	return ret ? ret : NotFound;
 }

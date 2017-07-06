@@ -34,6 +34,7 @@
 	TYPE(OBJMETHOD_type) \
 	TYPE(FNMETHOD_type) \
 	TYPE(BINDINGINIT_type) \
+	TYPE(RESTFN_type) \
 \
 	/* Map types. */ \
 	TYPE(MAPENTRY_type) \

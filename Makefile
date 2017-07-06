@@ -62,7 +62,7 @@ CFLAGS =		-I. -I$(PATHUS) -I$(PATHS) -I$(GCINC) -g -DTEST -Wall -Wextra -pedanti
 
 # LDFLAGS =		$(shell $(LLVMCONFIG) --ldflags)
 # LDLIBS =		$(shell $(LLVMCONFIG) --libs core) -L$(GCLIB) -lpthread -ldl -ltinfo -lgc
-LDLIBS =		-L$(GCLIB) -lgc -Wl,-rpath -Wl,/home/degustaf/lisp-compiler/build/gc/lib
+LDLIBS =		-L$(GCLIB) -lgc -ldl -Wl,-rpath -Wl,/home/degustaf/lisp-compiler/build/gc/lib
 
 DEPEND =		$(CC) $(CFLAGS) -MM -MG -MF
 RESULTS =		$(patsubst $(PATHT)Test%.c,$(PATHR)Test%.txt,$(SRCT))

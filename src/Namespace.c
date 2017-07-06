@@ -21,13 +21,17 @@ static Namespace *NewNamespace(const Symbol *s);
 static const char *toStringNamespace(const lisp_object *);
 
 Namespace *findNS(const Symbol *s) {
-	const lisp_object *ret = namespaces->obj.fns->IMapFns->entryAt(namespaces, (lisp_object*)s)->val;
+	const MapEntry *me = namespaces->obj.fns->IMapFns->entryAt(namespaces, (lisp_object*)s);
+	if(me == NULL)
+		return NULL;
+	const lisp_object *ret = me->val;
 	assert(ret->type == NAMESPACE_type);
 	return (Namespace*)ret;
 }
 
 Namespace *findOrCreateNS(const Symbol *s) {
-	const lisp_object *obj = namespaces->obj.fns->IMapFns->entryAt(namespaces, (const lisp_object*)s)->val;
+	const MapEntry *me = namespaces->obj.fns->IMapFns->entryAt(namespaces, (const lisp_object*)s);
+	const lisp_object *obj = me ? me->val: NULL;
 	if(obj != NULL) {
 		assert(obj->type == NAMESPACE_type);
 		return (Namespace*) obj;
@@ -39,7 +43,8 @@ Namespace *findOrCreateNS(const Symbol *s) {
 
 Namespace *lookupAlias(Namespace *ns, const Symbol *alias) {
 	const IMap *map = ns->aliases;
-	const lisp_object *ret = map->obj.fns->IMapFns->entryAt(map, (lisp_object*)alias)->val;
+	const MapEntry *me = map->obj.fns->IMapFns->entryAt(map, (lisp_object*)alias);
+	const lisp_object *ret = me ? me->val : NULL;
 	assert(ret->type == NAMESPACE_type);
 	return (Namespace*)ret;
 }
@@ -78,9 +83,9 @@ Var *internNS(Namespace *ns, const Symbol *s) {
 		Raise(e);
 	}
 	const IMap *map = ns->mappings;
-	const lisp_object *o = NULL;
-	if((o = map->obj.fns->IMapFns->entryAt(map, (const lisp_object*)s)->val))
-		return (Var*) o;
+	const MapEntry *me = map->obj.fns->IMapFns->entryAt(map, (const lisp_object*)s);
+	if(me && me->val)
+		return (Var*) me->val;
 	Var *v = NewVar(ns, s, NULL);
 	ns->mappings = map->obj.fns->IMapFns->assoc(map, (const lisp_object*)s, (const lisp_object*)v);
 	return v;
@@ -88,7 +93,8 @@ Var *internNS(Namespace *ns, const Symbol *s) {
 
 Var *findInternedVar(const Namespace *ns, const Symbol *s) {
 	const IMap *map = ns->mappings;
-	const lisp_object *obj = map->obj.fns->IMapFns->entryAt(map, (lisp_object*)s)->val;
+	const MapEntry *me = map->obj.fns->IMapFns->entryAt(map, (lisp_object*)s);
+	const lisp_object *obj = me ? me->val : NULL;
 	if(obj && (obj->type == VAR_type)) {
 		Var *ret = (Var*)obj;
 	   	if(getNamespaceVar(ret) == ns)
@@ -99,7 +105,8 @@ Var *findInternedVar(const Namespace *ns, const Symbol *s) {
 
 const lisp_object* getMapping(const Namespace *ns, const Symbol *s) {
 	const IMap *m = ns->mappings;
-	return m->obj.fns->IMapFns->entryAt(m, (lisp_object*)s)->val;
+	const MapEntry *me = m->obj.fns->IMapFns->entryAt(m, (lisp_object*)s);
+	return me ? me->val : NULL;
 }
 
 static Namespace *NewNamespace(const Symbol *s) {

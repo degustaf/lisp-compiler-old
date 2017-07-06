@@ -62,7 +62,8 @@ const Keyword _tagKW = {{KEYWORD_type, sizeof(Keyword), toStringKeyword, EqualBa
 const Keyword *const tagKW = &_tagKW;
 
 const Keyword *internKeyword(const Symbol *s) {
-	const lisp_object *obj = Cache->obj.fns->IMapFns->entryAt(Cache, (lisp_object*) s)->val;
+	const MapEntry *me = Cache->obj.fns->IMapFns->entryAt(Cache, (lisp_object*) s);
+	const lisp_object *obj = me ? me->val : NULL;
 	if(obj) {
 		assert(obj->type == KEYWORD_type);
 		return (const Keyword*) obj;
@@ -89,7 +90,8 @@ const char *getNamespaceKeyword(const Keyword *k) {
 }
 
 const Keyword *findKeyword(const Symbol *s) {
-	const lisp_object *ret = Cache->obj.fns->IMapFns->entryAt(Cache, (const lisp_object*)s)->val;
+	const MapEntry *me = Cache->obj.fns->IMapFns->entryAt(Cache, (const lisp_object*)s);
+	const lisp_object *ret = me ? me->val : NULL;
 	if(ret == NULL)
 		return NULL;
 	assert(ret->type == KEYWORD_type);
