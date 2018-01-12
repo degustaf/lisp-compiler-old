@@ -17,7 +17,7 @@ class ArityException : std::runtime_error {
 class IMap;
 class ISeq;
 
-class lisp_object : public std::enable_shared_from_this<lisp_object> {
+class lisp_object {
   public:
     virtual std::string toString(void) {return ((lisp_object * const) this)->toString();};
     virtual std::string toString(void) const = 0;
@@ -92,6 +92,20 @@ class ICollection : virtual public Seqable, virtual public Counted {
     virtual std::shared_ptr<const ICollection>empty()const = 0;
     virtual bool equiv(std::shared_ptr<const lisp_object>)const {return false;} /* TODO = 0 */;
 };
+class IStack : virtual public ICollection {
+  public:
+    // virtual std::shared_ptr<const lisp_object>peek()const = 0;
+    // virtual std::shared_ptr<const IStack>pop()const = 0;
+};
+class Reversible : virtual public lisp_object {
+  public:
+    // virtual std::shared_ptr<const lisp_object> rseq(void) const = 0;
+};
+class Indexed : virtual public Counted {
+  public:
+    virtual std::shared_ptr<const lisp_object>nth(size_t i)const = 0;
+    // virtual std::shared_ptr<const lisp_object>nth(size_t i, std::shared_ptr<const lisp_object> NotFound)const = 0;
+};
 class Associative2 {
   public:
     // virtual bool containsKey(std::shared_ptr<const lisp_object>) const = 0;
@@ -102,30 +116,32 @@ class Associative : virtual public ICollection, virtual public ILookup, virtual 
   public:
     std::shared_ptr<const Associative> assoc(std::shared_ptr<const lisp_object> key,
                                              std::shared_ptr<const lisp_object> val) const {
-      return std::shared_ptr<const Associative>(assoc_impl(key, val));
+      throw std::runtime_error("Unimplemented");
     };
-  private:
-    virtual const Associative *assoc_impl(std::shared_ptr<const lisp_object>,
-                                          std::shared_ptr<const lisp_object>) const = 0;
 };
 template <class Derived, class ...Bases>
 class Associative_inherit : virtual public Associative, public Bases... {
   public:
     std::shared_ptr<const Derived> assoc(std::shared_ptr<const lisp_object> key,
                                          std::shared_ptr<const lisp_object> val) const {
-      return std::shared_ptr<const Derived>(static_cast<const Derived*>(assoc_impl(key, val)));
+      return assoc_impl(key, val);
     };
   private:
     Associative_inherit() = default;
     friend Derived;
-    virtual const Associative_inherit *assoc_impl(std::shared_ptr<const lisp_object>,
-                                      std::shared_ptr<const lisp_object>) const = 0;
+    virtual std::shared_ptr<const Derived> assoc_impl(std::shared_ptr<const lisp_object>,
+                                                      std::shared_ptr<const lisp_object>) const = 0;
 };
-class IMap : public Associative_inherit<IMap> {
+class IMap : public virtual Associative {
   public:
     // virtual std::shared_ptr<const IMap> assocEx(std::shared_ptr<const lisp_object>,
     //                                                  std::shared_ptr<const lisp_object>) const = 0;
     virtual std::shared_ptr<const IMap> without(std::shared_ptr<const lisp_object>) const = 0;
+};
+class IVector : virtual public Associative, virtual public IStack, virtual public Reversible, virtual public Indexed {
+  public:
+    virtual size_t length (void) const = 0;
+    // virtual std::shared_ptr<const IVector>assocN(size_t n, std::shared_ptr<const lisp_object> val) const = 0;
 };
 class ISeq : public ICollection {
   public:
@@ -165,32 +181,30 @@ class ITransientAssociative : public virtual ITransientCollection, public virtua
   public:
     std::shared_ptr<ITransientAssociative> assoc(std::shared_ptr<const lisp_object> key,
                                                  std::shared_ptr<const lisp_object> val) {
-      return std::shared_ptr<ITransientAssociative>(static_cast<ITransientAssociative*>(assoc_impl(key, val)));
+      throw std::runtime_error("Unimplemented");
     };
-  private:
-    virtual ITransientAssociative *assoc_impl(std::shared_ptr<const lisp_object>,
-                                              std::shared_ptr<const lisp_object>) = 0;
-
 };
 template <class Derived, class ...Bases>
 class ITransientAssociative_inherit : virtual public ITransientAssociative, public Bases... {
   public:
     std::shared_ptr<Derived> assoc(std::shared_ptr<const lisp_object> key,
                                    std::shared_ptr<const lisp_object> val) {
-      return std::shared_ptr<Derived>(static_cast<Derived*>(assoc_impl(key, val)));
+      return assoc_impl(key, val);
     };
   private:
     ITransientAssociative_inherit() = default;
     friend Derived;
-    virtual ITransientAssociative_inherit *assoc_impl(std::shared_ptr<const lisp_object>, std::shared_ptr<const lisp_object>) = 0;
+    virtual std::shared_ptr<Derived> assoc_impl(std::shared_ptr<const lisp_object>, std::shared_ptr<const lisp_object>) = 0;
 };
 
-class ITransientMap : public ITransientAssociative_inherit<ITransientMap>, public Counted {
+class ITransientMap : public virtual ITransientAssociative, public Counted {
   public:
     virtual std::shared_ptr<ITransientMap> without(std::shared_ptr<const lisp_object> key) = 0;
 };
 
 class Number : public lisp_object {};
+
+
 // Util.cpp
 
 std::string toString(std::shared_ptr<const lisp_object>) {
@@ -238,9 +252,13 @@ size_t hashEq(std::shared_ptr<const lisp_object> o) {
   return 0;
 }
 
+std::shared_ptr<const ISeq> seq(std::shared_ptr<const lisp_object> o) {
+  // TODO
+}
+
 // AFn.cpp
 
-class AFn : public IFn {
+class AFn : public IFn, public std::enable_shared_from_this<AFn> {
   public:
     std::shared_ptr<const lisp_object> throwArity(size_t n) const;
     virtual std::shared_ptr<const lisp_object> invoke() const {return throwArity(0);} ;
@@ -429,12 +447,35 @@ class AMap : public AFn, public IMap {
     virtual std::string toString(void) const {return ::toString(shared_from_this());};
 };
 
-class ATransientMap : /* public AFn, */public ITransientMap {
+class ATransientMap : /* public AFn, */public ITransientMap, public std::enable_shared_from_this<ATransientMap> {
+  public:
+    std::shared_ptr<ITransientCollection> conj(std::shared_ptr<const lisp_object>);
+    virtual void ensureEditable() const = 0;
 };
+
+std::shared_ptr<ITransientCollection> ATransientMap::conj(std::shared_ptr<const lisp_object> o) {
+  ensureEditable();
+  std::shared_ptr<const IMapEntry> im = std::dynamic_pointer_cast<const IMapEntry>(o);
+  if(im)
+    return assoc(im->key(), im->val());
+  std::shared_ptr<const IVector> iv = std::dynamic_pointer_cast<const IVector>(o);
+  if(iv) {
+    if(iv->count() != 2)
+      throw std::runtime_error("Vector arg to map conj must be a pair");
+    return assoc(iv->nth(0), iv->nth(1));
+  }
+  std::shared_ptr<ITransientMap> ret = shared_from_this();
+  for(std::shared_ptr<const ISeq> es = ::seq(o); es != NULL; es = es->next()) {
+    im = std::dynamic_pointer_cast<const IMapEntry>(o);
+    ret = std::dynamic_pointer_cast<ITransientMap>(ret->assoc(im->key(), im->val()));
+  }
+  return ret;
+}
 
 
 // Map.hpp
 #include <thread>
+#include <vector>
 class INode;
 class TransientMap;
 
@@ -447,6 +488,8 @@ class LMap : public Associative_inherit<LMap, AMap>, public IEditableCollection,
     virtual std::shared_ptr<const IMeta> with_meta(std::shared_ptr<const IMap>) const;
     virtual std::shared_ptr<ITransientCollection> asTransient() const;
 
+    static std::shared_ptr<const LMap> create(std::vector<std::shared_ptr<const lisp_object> >);
+
     static std::shared_ptr<const LMap> EMPTY;
   private:
     const size_t _count;
@@ -456,7 +499,8 @@ class LMap : public Associative_inherit<LMap, AMap>, public IEditableCollection,
 
     LMap(std::shared_ptr<const IMap> meta, size_t count, std::shared_ptr<const INode> root, bool hasNull, std::shared_ptr<const lisp_object> nullValue) : IMeta(meta), _count(count), root(root), hasNull(hasNull), nullValue(nullValue) {};
     LMap(size_t count, std::shared_ptr<const INode> root, bool hasNull, std::shared_ptr<const lisp_object> nullValue) : _count(count), root(root), hasNull(hasNull), nullValue(nullValue) {};
-    virtual const LMap* assoc_impl(std::shared_ptr<const lisp_object>, std::shared_ptr<const lisp_object>) const;
+    virtual std::shared_ptr<const LMap> assoc_impl(std::shared_ptr<const lisp_object>,
+                                                      std::shared_ptr<const lisp_object>) const;
     friend TransientMap;
 };
 
@@ -465,7 +509,6 @@ class TransientMap : public ITransientAssociative_inherit<TransientMap, ATransie
     TransientMap(size_t hashId, size_t count, std::shared_ptr<INode> root, bool hasNull, std::shared_ptr<const lisp_object> nullValue) : hashId(hashId), _count(count), root(root), hasNull(hasNull), nullValue(nullValue) {};
     virtual std::string toString() const;
     virtual size_t count() const;
-    virtual std::shared_ptr<ITransientCollection> conj(std::shared_ptr<const lisp_object>);
     virtual std::shared_ptr<const ICollection> persistent();
     virtual std::shared_ptr<ITransientMap> without(std::shared_ptr<const lisp_object> key);
   private:
@@ -475,13 +518,13 @@ class TransientMap : public ITransientAssociative_inherit<TransientMap, ATransie
     bool hasNull;
     std::shared_ptr<const lisp_object> nullValue;
 
-    virtual TransientMap *assoc_impl(std::shared_ptr<const lisp_object>, std::shared_ptr<const lisp_object>);
-    void ensureEditable() const;
+    virtual std::shared_ptr<TransientMap> assoc_impl(std::shared_ptr<const lisp_object>, std::shared_ptr<const lisp_object>);
+    virtual void ensureEditable() const;
 };
 
 
 // AReference.hpp
-class AReference : public IReference {
+class AReference : public IReference, public std::enable_shared_from_this<AReference> {
   public:
     virtual std::shared_ptr<const IMap> resetMeta(std::shared_ptr<const IMap> m) {IMeta::_meta = m; return m;};
   protected:
@@ -627,19 +670,18 @@ std::shared_ptr<const lisp_object> Var::deref() {
 class INode : public lisp_object {
   public:
     virtual std::string toString(void) const {return "";};
-    std::shared_ptr<const INode> assoc(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const {
-      return std::shared_ptr<const INode>(assoc_impl(shift, hash, key, val, addedLeaf));
-    };
-	  std::shared_ptr<INode> assoc(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {
-	    return std::shared_ptr<INode>(assoc_impl(hashId, shift, hash, key, val, addedLeaf));
+    virtual std::shared_ptr<const INode> assoc(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const = 0;
+	  virtual std::shared_ptr<INode> assoc(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) = 0;
+	  virtual std::shared_ptr<INode> assoc(std::thread::id id, size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {
+	    return assoc(std::hash<std::thread::id>{}(id), shift, hash, key, val, addedLeaf);
 	  };
-	  virtual std::shared_ptr<INode> assoc(std::thread::id id, size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {return assoc(std::hash<std::thread::id>{}(id), shift, hash, key, val, addedLeaf);};
-	  // virtual std::shared_ptr<INode> without(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key) = 0;
+	  virtual std::shared_ptr<const INode> without(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key) const = 0;
+	  virtual std::shared_ptr<INode> without(size_t hashId, size_t shift, size_t hash,
+	          std::shared_ptr<const lisp_object> key, bool &removedLeaf) = 0;
 	  // virtual std::shared_ptr<const IMapEntry> find(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key) = 0;
 	  // virtual std::shared_ptr<const lisp_object> find(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> notFound) = 0;
 
 	// ISeq nodeSeq();
-	// INode without(AtomicReference<Thread> edit, int shift, int hash, Object key, Box removedLeaf);
   // Object kvreduce(IFn f, Object init);
 	// Object fold(IFn combinef, IFn reducef, IFn fjtask, IFn fjfork, IFn fjjoin);
 	protected:
@@ -647,31 +689,22 @@ class INode : public lisp_object {
 	    hashId(hashId), array(array) {};
 	  std::vector<std::shared_ptr<const lisp_object> > array;
     size_t hashId;
-
-	  virtual const INode *assoc_impl(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const = 0;
-	  virtual INode *assoc_impl(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) = 0;
-
 };
 
 template<class Derived>
-class INode_inherit : public INode {
+class INode_inherit : public INode, std::enable_shared_from_this<Derived> {
   public:
     virtual ~INode_inherit() = default;
-    std::shared_ptr<const INode> assoc(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const {
-      return std::shared_ptr<const INode>(assoc_impl(shift, hash, key, val, addedLeaf));
-    };
-    std::shared_ptr<INode> assoc(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {
-	    return std::shared_ptr<INode>(assoc_impl(hashId, shift, hash, key, val, addedLeaf));
-	  };
 	protected:
-	  virtual Derived *ensureEditable(size_t hashId) = 0;
-	  Derived *editAndSet(size_t hashId, size_t i, std::shared_ptr<const lisp_object> a) {
-	    Derived *editable = ensureEditable(hashId);
+	  virtual std::shared_ptr<Derived> ensureEditable(size_t hashId) = 0;
+	  std::shared_ptr<Derived> editAndSet(size_t hashId, size_t i, std::shared_ptr<const lisp_object> a) {
+	    std::shared_ptr<Derived> editable = ensureEditable(hashId);
       editable->array[i] = a;
       return editable;
 	  };
-	  Derived *editAndSet(size_t hashId, size_t i, std::shared_ptr<const lisp_object> a, size_t j, std::shared_ptr<const lisp_object> b) {
-	    Derived *editable = ensureEditable(hashId);
+	  std::shared_ptr<Derived> editAndSet(size_t hashId, size_t i, std::shared_ptr<const lisp_object> a,
+	                                                     size_t j, std::shared_ptr<const lisp_object> b) {
+	    std::shared_ptr<Derived> editable = ensureEditable(hashId);
       editable->array[i] = a;
       editable->array[j] = b;
       return editable;
@@ -716,6 +749,11 @@ class BitmapIndexedNode : public INode_inherit<BitmapIndexedNode> {
       INode_inherit<BitmapIndexedNode>(hashId, array), bitmap(bitmap) {};
 
     size_t index(uint32_t bit) const;
+    virtual std::shared_ptr<const INode> assoc(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const;
+	  virtual std::shared_ptr<INode> assoc(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf);
+	  virtual std::shared_ptr<const INode> without(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key) const;
+	  virtual std::shared_ptr<INode> without(size_t hashId, size_t shift, size_t hash,
+	          std::shared_ptr<const lisp_object> key, bool &removedLeaf);
 
     static const std::shared_ptr<const BitmapIndexedNode> Empty;
     static const std::thread::id NOEDIT;
@@ -723,24 +761,28 @@ class BitmapIndexedNode : public INode_inherit<BitmapIndexedNode> {
   private:
     uint32_t bitmap;
     
-    virtual const INode *assoc_impl(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const;
-	  virtual INode *assoc_impl(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf);
-	  BitmapIndexedNode *ensureEditable(size_t hashId);
+	  std::shared_ptr<BitmapIndexedNode> ensureEditable(size_t hashId);
+	  std::shared_ptr<BitmapIndexedNode> editAndRemovePair(size_t hashId, uint32_t bit, size_t i);
 };
 
-class HashCollisionNode : public INode_inherit<HashCollisionNode>, std::enable_shared_from_this<HashCollisionNode> {
+class HashCollisionNode : public INode_inherit<HashCollisionNode> {
   public:
     HashCollisionNode(size_t hashId, uint32_t hash, size_t count, std::vector<std::shared_ptr<const lisp_object> > array) :
       INode_inherit<HashCollisionNode>(hashId, array), hash(hash), count(count) {};
-    
+
+	  virtual std::shared_ptr<HashCollisionNode> ensureEditable(size_t hashId);
+    virtual std::shared_ptr<const INode> assoc(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const;
+	  virtual std::shared_ptr<INode> assoc(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf);
+	  virtual std::shared_ptr<const INode> without(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key) const;
+	  virtual std::shared_ptr<INode> without(size_t hashId, size_t shift, size_t hash,
+	          std::shared_ptr<const lisp_object> key, bool &removedLeaf);
+
+	  std::shared_ptr<HashCollisionNode> ensureEditable2(size_t hashId, size_t count, std::vector<std::shared_ptr<const lisp_object> > array);
   private:
     const uint32_t hash;
     size_t count;
 
-	  virtual HashCollisionNode *ensureEditable(size_t hashId);
     size_t findIndex(std::shared_ptr<const lisp_object>) const;
-    virtual const INode *assoc_impl(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const;
-	  virtual INode *assoc_impl(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf);
 };
 
 class ArrayNode : public INode_inherit<ArrayNode> {
@@ -752,15 +794,22 @@ class ArrayNode : public INode_inherit<ArrayNode> {
       INode_inherit<ArrayNode>(hashId, std::vector<std::shared_ptr<const lisp_object> >()),
       count(count), array(array) {};
 
+    virtual std::shared_ptr<const INode> assoc(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key,
+                                               std::shared_ptr<const lisp_object> val, bool& addedLeaf) const;
+    virtual std::shared_ptr<INode> assoc(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key,
+                                         std::shared_ptr<const lisp_object> val, bool& addedLeaf);
+    virtual std::shared_ptr<const INode> without(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key) const;
+	  virtual std::shared_ptr<INode> without(size_t hashId, size_t shift, size_t hash,
+	          std::shared_ptr<const lisp_object> key, bool &removedLeaf);
+
   private:
     size_t count;
     std::vector<std::shared_ptr<INode> >array;
 
-    virtual const INode *assoc_impl(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const;
-    virtual INode *assoc_impl(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf);
-	  virtual ArrayNode *ensureEditable(size_t hashId);
+	  virtual std::shared_ptr<ArrayNode> ensureEditable(size_t hashId);
 
-    ArrayNode *editAndSet(size_t hashId, size_t i, std::shared_ptr<INode> a);
+    std::shared_ptr<ArrayNode> editAndSet(size_t hashId, size_t i, std::shared_ptr<INode> a);
+    std::shared_ptr<BitmapIndexedNode> pack(size_t hashId, size_t idx) const;
 };
 
 
@@ -781,12 +830,45 @@ static std::shared_ptr<const INode> createNode(size_t shift, std::shared_ptr<con
   return createNode(BitmapIndexedNode::HASH_NOEDIT, shift, key1, val1, key2hash, key2, val2);
 }
 
+static std::vector<std::shared_ptr<INode> > cloneAndSet(const std::vector<std::shared_ptr<INode> > &array,
+       size_t i, std::shared_ptr<INode> a) {
+	std::vector<std::shared_ptr<INode> > clone(array);
+	clone[i] = a;
+	return clone;
+}
+
+static std::vector<std::shared_ptr<const lisp_object> > cloneAndSet(const std::vector<std::shared_ptr<const lisp_object> > &array,
+       size_t i, std::shared_ptr<const lisp_object> a) {
+	std::vector<std::shared_ptr<const lisp_object> > clone(array);
+	clone[i] = a;
+	return clone;
+}
+
+static std::vector<std::shared_ptr<const lisp_object> > cloneAndSet(std::vector<std::shared_ptr<const lisp_object> > &array,
+       size_t i, std::shared_ptr<const lisp_object> a, size_t j, std::shared_ptr<const lisp_object> b) {
+	std::vector<std::shared_ptr<const lisp_object> > clone(array);
+	clone[i] = a;
+	clone[j] = b;
+	return clone;
+}
+
+static std::vector<std::shared_ptr<const lisp_object> > removePair(const std::vector<std::shared_ptr<const lisp_object> > &array,
+                                                                   size_t i) {
+	std::vector<std::shared_ptr<const lisp_object> > newArray(array.size() - 2);
+	for(size_t j=0; j<2*i; j++)
+	  newArray[j] = array[j];
+	for(size_t j=2*i; j<newArray.size(); j++)
+	  newArray[j] = array[j+2];
+	return newArray;
+}
+
+
 // BitmapIndexedNode
 const std::thread::id BitmapIndexedNode::NOEDIT =  std::thread().get_id();
 const std::shared_ptr<const BitmapIndexedNode> BitmapIndexedNode::Empty = std::make_shared<const BitmapIndexedNode>(NOEDIT, 0, std::vector<std::shared_ptr<const lisp_object> >());
 const size_t BitmapIndexedNode::HASH_NOEDIT = std::hash<std::thread::id>{}(BitmapIndexedNode::NOEDIT);
 
-const INode *BitmapIndexedNode::assoc_impl(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const {
+std::shared_ptr<const INode> BitmapIndexedNode::assoc(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const {
   uint32_t bit = bitpos(hash, shift);
 	size_t idx = index(bit);
 	if((bitmap & bit) != 0) {
@@ -796,23 +878,23 @@ const INode *BitmapIndexedNode::assoc_impl(size_t shift, uint32_t hash, std::sha
 	    std::shared_ptr<const INode> n = std::dynamic_pointer_cast<const INode>(valOrNode);
 	    n = n->assoc(shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
 	    if(n == valOrNode)
-	      return this;
+	      return shared_from_this();
 	    std::vector<std::shared_ptr<const lisp_object> > newArray(array);
 	    newArray[2*idx+1] = n;
-	    return new BitmapIndexedNode(NOEDIT, bitmap, newArray);
+	    return std::make_shared<const BitmapIndexedNode>(NOEDIT, bitmap, newArray);
 	  }
 	  if(equiv(key, keyOrNull)) {
 	    if(val == valOrNode)
-	      return this;
+	      return shared_from_this();
 	    std::vector<std::shared_ptr<const lisp_object> > newArray(array);
 	    newArray[2*idx+1] = val;
-	    return new BitmapIndexedNode(NOEDIT, bitmap, newArray);
+	    return std::make_shared<BitmapIndexedNode>(NOEDIT, bitmap, newArray);
 	  }
 	  addedLeaf = true;
     std::vector<std::shared_ptr<const lisp_object> > newArray(array);
 	  newArray[2*idx    ] = NULL;
 	  newArray[2*idx + 1] = createNode(shift + NODE_LOG_SIZE, keyOrNull, valOrNode, hash, key, val);
-	  return new BitmapIndexedNode(NOEDIT, bitmap, newArray);
+	  return std::make_shared<BitmapIndexedNode>(NOEDIT, bitmap, newArray);
 	} else {
 	  size_t n = popcount(bitmap);
 	  if(n >= (NODE_SIZE >> 1)) {
@@ -829,7 +911,7 @@ const INode *BitmapIndexedNode::assoc_impl(size_t shift, uint32_t hash, std::sha
 					j += 2;
 				}
 	    }
-	    return new ArrayNode(NOEDIT, n+1, nodes);
+	    return std::make_shared<ArrayNode>(NOEDIT, n+1, nodes);
 	  } else {
 	    std::vector<std::shared_ptr<const lisp_object> > newArray(2*(n+1));
 	    for(size_t i=0; i<2*idx; i++)
@@ -839,12 +921,12 @@ const INode *BitmapIndexedNode::assoc_impl(size_t shift, uint32_t hash, std::sha
 	    newArray[2*idx+1] = val;
 	    for(size_t i=2*idx; i<2*(n+1); i++)
 	      newArray[i+2] = array[i];
-	    return new BitmapIndexedNode(NOEDIT, bitmap | bit, newArray);
+	    return std::make_shared<BitmapIndexedNode>(NOEDIT, bitmap | bit, newArray);
 	  }
 	}
 }
 
-INode *BitmapIndexedNode::assoc_impl(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {
+std::shared_ptr<INode> BitmapIndexedNode::assoc(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {
   uint32_t bit = bitpos(hash, shift);
 	size_t idx = index(bit);
 	if(bitmap & bit) {
@@ -854,12 +936,12 @@ INode *BitmapIndexedNode::assoc_impl(size_t hashId, size_t shift, size_t hash, s
 	    std::shared_ptr<INode> n = std::const_pointer_cast<INode>(std::dynamic_pointer_cast<const INode>(valOrNode));
 	    n = n->assoc(hashId, shift + NODE_LOG_SIZE, hash, key, val, addedLeaf);
 	    if(n == valOrNode)
-	      return this;
+	      return shared_from_this();
 	    return editAndSet(hashId, 2*idx+1, val);
 	  }
 	  if(equiv(key, keyOrNull)) {
 	    if(val == valOrNode)
-	      return this;
+	      return shared_from_this();
 	    return editAndSet(hashId, 2*idx+1, val);
 	  }
 	  addedLeaf = true;
@@ -869,7 +951,7 @@ INode *BitmapIndexedNode::assoc_impl(size_t hashId, size_t shift, size_t hash, s
 	  size_t n = popcount(bitmap);
 	  if(2*n < array.size()) {
 	    addedLeaf = true;
-	    BitmapIndexedNode *editable = ensureEditable(hashId);
+	    std::shared_ptr<BitmapIndexedNode> editable = ensureEditable(hashId);
 	    for(size_t i=2*n-1; i>=2*idx; i--)
 	      editable->array[i+2] = editable->array[i];
 	    editable->array[2*idx  ] = key;
@@ -891,7 +973,7 @@ INode *BitmapIndexedNode::assoc_impl(size_t hashId, size_t shift, size_t hash, s
 					j += 2;
 				}
 	    }
-	    return new ArrayNode(hashId, n+1, nodes);
+	    return std::make_shared<ArrayNode>(hashId, n+1, nodes);
 	  } else {
 	    std::vector<std::shared_ptr<const lisp_object> > newArray(2*(n+4));
 	    for(size_t i=0; i<2*idx; i++)
@@ -901,7 +983,7 @@ INode *BitmapIndexedNode::assoc_impl(size_t hashId, size_t shift, size_t hash, s
 			newArray[2*idx+1] = val;
 			for(size_t i=2*idx; i<2*n; i++)
 			  newArray[i+2] = array[i];
-			 BitmapIndexedNode *editable = ensureEditable(hashId);
+			 std::shared_ptr<BitmapIndexedNode> editable = ensureEditable(hashId);
 			 editable->array = newArray;
 			 editable->bitmap |= bit;
 			 return editable;
@@ -913,23 +995,85 @@ size_t BitmapIndexedNode::index(uint32_t bit) const {
 	return popcount(bitmap & (bit - 1));
 }
 
-BitmapIndexedNode *BitmapIndexedNode::ensureEditable(size_t hashId) {
+std::shared_ptr<BitmapIndexedNode> BitmapIndexedNode::ensureEditable(size_t hashId) {
   if(this->hashId == hashId)
-    return this;
+    return shared_from_this();
   size_t n = popcount(bitmap);
   std::vector<std::shared_ptr<const lisp_object> > newArray(2*(n+1));
   for(size_t i=0; i<2*n; i++)
     newArray[i] = array[i];
-  return new BitmapIndexedNode(hashId, bitmap, newArray);
+  return std::make_shared<BitmapIndexedNode>(hashId, bitmap, newArray);
 }
 
+std::shared_ptr<const INode> BitmapIndexedNode::without(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key) const {
+  uint32_t bit = bitpos(hash, shift);
+	 if((bitmap & bit) == 0)
+		return shared_from_this();
+	size_t idx = index(bit);
+	std::shared_ptr<const lisp_object> keyOrNull = array[2*idx];
+	std::shared_ptr<const lisp_object> valOrNode = array[2*idx+1];
+	if(keyOrNull == NULL) {
+		std::shared_ptr<const INode> n = std::dynamic_pointer_cast<const INode>(valOrNode)
+		                                 ->without(shift + NODE_LOG_SIZE, hash, key);
+		if(n == valOrNode)
+			return shared_from_this();
+		if(n)
+			return std::make_shared<BitmapIndexedNode>(HASH_NOEDIT, bitmap, cloneAndSet(array, 2*idx+1, n));
+		if(bitmap == bit) 
+			return NULL;
+		return std::make_shared<BitmapIndexedNode>(HASH_NOEDIT, bitmap ^ bit, removePair(array, idx));
+	}
+	if(equiv(key, keyOrNull))
+		return std::make_shared<BitmapIndexedNode>(HASH_NOEDIT, bitmap ^ bit, removePair(array, idx));
+	return shared_from_this();
+}
+
+std::shared_ptr<INode> BitmapIndexedNode::without(size_t hashId, size_t shift, size_t hash,
+        std::shared_ptr<const lisp_object> key, bool &removedLeaf){
+  size_t bit = bitpos(hash, shift);
+	if(bitmap & bit)
+		return shared_from_this();
+	size_t idx = index(bit);
+	std::shared_ptr<const lisp_object> keyOrNull = array[2*idx];
+	std::shared_ptr<const lisp_object> valOrNode = array[2*idx+1];
+	if(keyOrNull == NULL) {
+		std::shared_ptr<INode> n = std::const_pointer_cast<INode>(std::dynamic_pointer_cast<const INode>(valOrNode))
+		                           ->without(hashId, shift + NODE_LOG_SIZE, hash, key, removedLeaf);
+		if(n == valOrNode)
+			return shared_from_this();
+		if(n)
+			return editAndSet(hashId, 2*idx+1, n);
+		if (bitmap == bit) 
+			return NULL;
+		return editAndRemovePair(hashId, bit, idx); 
+	}
+	if(equiv(key, keyOrNull)) {
+		removedLeaf = true;
+		return editAndRemovePair(hashId, bit, idx); 			
+	}
+	return shared_from_this();
+}
+
+std::shared_ptr<BitmapIndexedNode> BitmapIndexedNode::editAndRemovePair(size_t hashId, uint32_t bit, size_t i) {
+		if (bitmap == bit) 
+			return NULL;
+		std::shared_ptr<BitmapIndexedNode> editable = ensureEditable(hashId);
+		editable->bitmap ^= bit;
+		for(size_t j=2*i; j<editable->array.size()-2; j++)
+		  editable->array[j] = editable->array[j+2];
+		editable->array[editable->array.size() - 2] = NULL;
+		editable->array[editable->array.size() - 1] = NULL;
+		return editable;
+	}
+
+
 // HashCollisionNode
-const INode *HashCollisionNode::assoc_impl(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const {
+std::shared_ptr<const INode> HashCollisionNode::assoc(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const {
   if(hash == this->hash) {
     size_t idx = findIndex(key);
     if(idx != (size_t)-1) {
       if(array[idx+1]->equals(val))
-        return this;
+        return shared_from_this();
     }
     std::vector<std::shared_ptr<const lisp_object> > newArray(2*count + 2);
     for(size_t i=0; i<2*count+2; i++)
@@ -937,18 +1081,65 @@ const INode *HashCollisionNode::assoc_impl(size_t shift, uint32_t hash, std::sha
     newArray[2*count    ] = key;
     newArray[2*count + 1] = val;
     addedLeaf = true;
-    return new HashCollisionNode(hashId, hash, count+1, newArray);
+    return std::make_shared<HashCollisionNode>(hashId, hash, count+1, newArray);
   }
-  return (new BitmapIndexedNode(BitmapIndexedNode::NOEDIT, bitpos(this->hash, shift), std::vector<std::shared_ptr<const lisp_object> >{NULL, std::dynamic_pointer_cast<const INode>(shared_from_this())}))
-    ->assoc(shift, hash, key, val, addedLeaf).get();
+  std::vector<std::shared_ptr<const lisp_object> > newArray(2);
+  newArray[1] = shared_from_this();
+  return std::make_shared<BitmapIndexedNode>(BitmapIndexedNode::NOEDIT, bitpos(this->hash, shift), newArray)
+    ->assoc(shift, hash, key, val, addedLeaf);
 }
 
-INode *HashCollisionNode::assoc_impl(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object>   key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {
+std::shared_ptr<INode> HashCollisionNode::assoc(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object>   key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {
   if(hash == this->hash) {
-    // TODO
+    size_t idx = findIndex(key);
+    if(idx != ((size_t)-1)) {
+      if(array[idx+1] == val)
+        return shared_from_this();
+      return editAndSet(hashId, idx+1, val);
+    }
+    if(array.size() > 2*count) {
+      addedLeaf = true;
+      std::shared_ptr<HashCollisionNode> editable = editAndSet(hashId, 2*count, key, 2*count+1, val);
+      editable->count++;
+      return editable;
+    }
+    std::vector<std::shared_ptr<const lisp_object> > newArray(array.size()+2);
+    for(size_t i=0; i<array.size(); i++)
+      newArray[i] = array[i];
+    newArray[array.size()  ] = key;
+    newArray[array.size()+1] = val;
+    addedLeaf = true;
+    return ensureEditable2(hashId, count+1, newArray);
   }
-  // TODO
-  return NULL;
+  std::vector<std::shared_ptr<const lisp_object> > newArray(4);
+  newArray[1] = shared_from_this();
+  return std::make_shared<BitmapIndexedNode>(hashId, bitpos(this->hash, shift), newArray)
+         ->assoc(hashId, shift, hash, key, val, addedLeaf);
+}
+
+std::shared_ptr<const INode> HashCollisionNode::without(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key) const {
+  size_t idx = findIndex(key);
+		if(idx == (size_t)-1)
+			return shared_from_this();
+		if(count == 1)
+			return NULL;
+		return std::make_shared<HashCollisionNode>(BitmapIndexedNode::HASH_NOEDIT, hash, count - 1, removePair(array, idx/2));
+}
+
+std::shared_ptr<INode> HashCollisionNode::without(size_t hashId, size_t shift, size_t hash,
+        std::shared_ptr<const lisp_object> key, bool &removedLeaf) {
+  size_t idx = findIndex(key);
+	if(idx == (size_t)-1)
+		return shared_from_this();
+	removedLeaf = true;
+	if(count == 1)
+		return NULL;
+	std::shared_ptr<HashCollisionNode> editable = ensureEditable(hashId);
+	editable->array[idx      ] = editable->array[2*count-2];
+	editable->array[idx+1    ] = editable->array[2*count-1];
+	editable->array[2*count-2] = editable->array[2*count-1] = NULL;
+	editable->count--;
+	return editable;
 }
 
 size_t HashCollisionNode::findIndex(std::shared_ptr<const lisp_object> key) const {
@@ -958,58 +1149,123 @@ size_t HashCollisionNode::findIndex(std::shared_ptr<const lisp_object> key) cons
   return (size_t) -1;
 }
 
-HashCollisionNode *HashCollisionNode::ensureEditable(size_t hashId) {
+std::shared_ptr<HashCollisionNode> HashCollisionNode::ensureEditable(size_t hashId) {
   if(this->hashId == hashId)
-    return this;
+    return shared_from_this();
   std::vector<std::shared_ptr<const lisp_object> > newArray(2*(count+1));
   for(size_t i=0; i<2*count; i++)
     newArray[i] = array[i];
-  return new HashCollisionNode(hashId, hash, count, newArray);
+  return std::make_shared<HashCollisionNode>(hashId, hash, count, newArray);
+}
+
+std::shared_ptr<HashCollisionNode> HashCollisionNode::ensureEditable2(size_t hashId, size_t count,
+      std::vector<std::shared_ptr<const lisp_object> > array) {
+  if(this->hashId == hashId) {
+    this->array = array;
+    this->count = count;
+  }
+  return std::make_shared<HashCollisionNode>(hashId, hash, count, array);
 }
 
 // ArrayNode
-const INode *ArrayNode::assoc_impl(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const {
+std::shared_ptr<const INode> ArrayNode::assoc(size_t shift, uint32_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) const {
   size_t idx = mask(hash, shift);
 	std::shared_ptr<INode> node = array[idx];
 	if(node == NULL) {
 	  std::vector<std::shared_ptr<INode> >newArray(array);
 	  newArray[idx] = std::const_pointer_cast<INode>(BitmapIndexedNode::Empty->assoc(shift + NODE_LOG_SIZE, hash, key, val, addedLeaf));
-		return new ArrayNode(BitmapIndexedNode::NOEDIT, count + 1, newArray);
+		return std::make_shared<ArrayNode>(BitmapIndexedNode::NOEDIT, count + 1, newArray);
 	}
 	std::shared_ptr<INode> n = std::const_pointer_cast<INode>(node->assoc(shift + NODE_LOG_SIZE, hash, key, val, addedLeaf));
   if(n == node)
-    return this;
+    return shared_from_this();
   std::vector<std::shared_ptr<INode> >newArray(array);
 	newArray[idx] = n;
-	return new ArrayNode(BitmapIndexedNode::NOEDIT, count, newArray);
+	return std::make_shared<ArrayNode>(BitmapIndexedNode::NOEDIT, count, newArray);
 }
 
-INode *ArrayNode::assoc_impl(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {
+std::shared_ptr<INode> ArrayNode::assoc(size_t hashId, size_t shift, size_t hash, std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val, bool& addedLeaf) {
   size_t idx = mask(hash, shift);
   std::shared_ptr<INode> node = array[idx];
   if(node == NULL) {
-    ArrayNode *editable = editAndSet(hashId, idx, std::const_pointer_cast<BitmapIndexedNode>(BitmapIndexedNode::Empty)
+    std::shared_ptr<ArrayNode> editable = editAndSet(hashId, idx, std::const_pointer_cast<BitmapIndexedNode>(BitmapIndexedNode::Empty)
         ->assoc(hashId, shift+NODE_LOG_SIZE, hash, key, val, addedLeaf));
       editable->count++;
       return editable;
   }
   std::shared_ptr<INode> n = node->assoc(hashId, shift+NODE_LOG_SIZE, hash, key, val, addedLeaf);
   if(n == node)
-    return this;
+    return shared_from_this();
   return editAndSet(hashId, idx, n);
 }
 
-ArrayNode *ArrayNode::ensureEditable(size_t hashId) {
+std::shared_ptr<ArrayNode> ArrayNode::ensureEditable(size_t hashId) {
   if(this->hashId == hashId)
-    return this;
-  return new ArrayNode(hashId, count, array);
+    return shared_from_this();
+  return std::make_shared<ArrayNode>(hashId, count, array);
 }
 
-ArrayNode *ArrayNode::editAndSet(size_t hashId, size_t i, std::shared_ptr<INode> a) {
-  ArrayNode *editable = ensureEditable(hashId);
+std::shared_ptr<ArrayNode> ArrayNode::editAndSet(size_t hashId, size_t i, std::shared_ptr<INode> a) {
+  std::shared_ptr<ArrayNode> editable = ensureEditable(hashId);
   editable->array[i] = a;
   return editable;
 };
+
+std::shared_ptr<const INode> ArrayNode::without(size_t shift, size_t hash, std::shared_ptr<const lisp_object> key) const {
+  size_t idx = mask(hash, shift);
+  std::shared_ptr<INode> node = array[idx];
+  if(node == NULL)
+    return shared_from_this();
+  std::shared_ptr<INode> n = std::const_pointer_cast<INode>(node->without(shift+NODE_LOG_SIZE, hash, key));
+  if(n == node)
+    return shared_from_this();
+  if(n == NULL) {
+    if(count <= (NODE_SIZE >> 2)) 
+      return pack(BitmapIndexedNode::HASH_NOEDIT, idx);
+    return std::make_shared<ArrayNode>(BitmapIndexedNode::HASH_NOEDIT, count-1, cloneAndSet(array, idx, n));
+  }
+  return std::make_shared<ArrayNode>(BitmapIndexedNode::HASH_NOEDIT, count, cloneAndSet(array, idx, n));
+}
+
+std::shared_ptr<INode> ArrayNode::without(size_t hashId, size_t shift, size_t hash,
+          std::shared_ptr<const lisp_object> key, bool &removedLeaf) {
+  size_t idx = mask(hash, shift);
+	std::shared_ptr<INode> node = array[idx];
+	if(node == NULL)
+		return shared_from_this();
+	std::shared_ptr<INode> n = node->without(hashId, shift + NODE_LOG_SIZE, hash, key, removedLeaf);
+	if(n == node)
+		return shared_from_this();
+	if(n == NULL) {
+		if (count <= NODE_SIZE >> 2) // shrink
+			return pack(hashId, idx);
+		std::shared_ptr<ArrayNode> editable = editAndSet(hashId, idx, n);
+		editable->count--;
+		return editable;
+	}
+	return editAndSet(hashId, idx, n);
+}
+
+std::shared_ptr<BitmapIndexedNode> ArrayNode::pack(size_t hashId, size_t idx) const {
+  std::vector<std::shared_ptr<const lisp_object> > newArray(2*(count-1));
+  size_t j = 1;
+  uint32_t bitmap = 0;
+  for(size_t i=0; i<idx; i++) {
+    if(array[i]) {
+      newArray[j] = array[i];
+      bitmap |= (1 << i);
+      j += 2;
+    }
+  }
+  for(size_t i=idx+1; i<array.size(); i++) {
+    if(array[i]) {
+      newArray[j] = array[i];
+      bitmap |= (1 << i);
+      j += 2;
+    }
+  }
+  return std::make_shared<BitmapIndexedNode>(hashId, bitmap, newArray);
+}
 
 
 // Map.cpp
@@ -1026,23 +1282,30 @@ std::shared_ptr<const ICollection> LMap::empty() const {
   return std::dynamic_pointer_cast<const ICollection>(EMPTY->with_meta(meta()));
 }
 
-const LMap *LMap::assoc_impl(std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val) const {
+std::shared_ptr<const LMap> LMap::assoc_impl(std::shared_ptr<const lisp_object> key, 
+                                             std::shared_ptr<const lisp_object> val) const {
   if(key == NULL) {
     if(hasNull && (val == nullValue))
-      return this;
-    return new LMap(meta(), _count + (hasNull ? 0 : 1), root, true, val);
+      return std::dynamic_pointer_cast<const LMap>(shared_from_this());
+    return std::shared_ptr<const LMap>(new LMap(meta(), _count + (hasNull ? 0 : 1), root, true, val));
   }
   bool addedLeaf = false;
   std::shared_ptr<const INode> newroot = (root == NULL ? BitmapIndexedNode::Empty : root)->assoc(0, hashEq(key), key, val, addedLeaf);
   if(newroot == root)
-    return this;
-  return new LMap(meta(), addedLeaf ? _count + 1 : _count, newroot, hasNull, nullValue);
+    return std::dynamic_pointer_cast<const LMap>(shared_from_this());
+  return std::shared_ptr<const LMap>(new LMap(meta(), addedLeaf ? _count + 1 : _count, newroot, hasNull, nullValue));
 }
 
-//    LMap(std::shared_ptr<const IMap> meta, size_t count, std::shared_ptr<const INode> root, bool hasNull, std::shared_ptr<const lisp_object> nullValue) : IMeta(meta), _count(count), root(root), hasNull(hasNull), nullValue(nullValue) {};
-
-std::shared_ptr<const IMap> LMap::without(std::shared_ptr<const lisp_object>) const {
-  // TODO
+std::shared_ptr<const IMap> LMap::without(std::shared_ptr<const lisp_object> key) const {
+  if(key == NULL)
+		return hasNull ? std::shared_ptr<LMap>(new LMap(meta(), _count - 1, root, false, std::shared_ptr<const lisp_object>()))
+		               : std::dynamic_pointer_cast<const LMap>(shared_from_this());
+	if(root == NULL)
+		return std::dynamic_pointer_cast<const LMap>(shared_from_this());
+	std::shared_ptr<const INode> newroot = root->without(0, hash(key), key);
+	if(newroot == root)
+		return std::dynamic_pointer_cast<const LMap>(shared_from_this());
+	return std::shared_ptr<LMap>(new LMap(meta(), _count - 1, newroot, hasNull, nullValue));
 }
 
 std::shared_ptr<const IMeta> LMap::with_meta(std::shared_ptr<const IMap> meta) const {
@@ -1053,35 +1316,53 @@ std::shared_ptr<ITransientCollection> LMap::asTransient() const {
   return std::make_shared<TransientMap>(std::hash<std::thread::id>{}(std::this_thread::get_id()), _count, std::const_pointer_cast<INode>(root), hasNull, nullValue);
 }
 
+std::shared_ptr<const LMap> LMap::create(std::vector<std::shared_ptr<const lisp_object> > init) {
+  if(init.size() % 2)
+    throw std::runtime_error("Map literal must contain an even number of forms");
+  std::shared_ptr<ITransientMap> ret = std::dynamic_pointer_cast<ITransientMap>(EMPTY->asTransient());
+  for(size_t i=0; i<init.size(); i++)
+    ret = std::dynamic_pointer_cast<ITransientMap>(ret->assoc(init[i], init[i+1]));
+  return std::dynamic_pointer_cast<const LMap>(ret->persistent());
+}
+
 std::shared_ptr<const LMap> LMap::EMPTY = std::shared_ptr<LMap>(new LMap(0, NULL, false, NULL));
 
 std::string TransientMap::toString() const {
-  // TODO
+  return "";
 }
 
 size_t TransientMap::count() const {
   ensureEditable();
-  // TODO
-}
-
-std::shared_ptr<ITransientCollection> TransientMap::conj(std::shared_ptr<const lisp_object>) {
-  ensureEditable();
-  // TODO
+  return _count;
 }
 
 std::shared_ptr<const ICollection> TransientMap::persistent() {
   ensureEditable();
   hashId = BitmapIndexedNode::HASH_NOEDIT;
   return std::shared_ptr<const LMap>(new LMap(_count, root, hasNull, nullValue));
-  // TODO
 }
 
 std::shared_ptr<ITransientMap> TransientMap::without(std::shared_ptr<const lisp_object> key) {
   ensureEditable();
-  // TODO
+  if (key == NULL) {
+		if (!hasNull) return shared_from_this();
+		hasNull = false;
+		nullValue = NULL;
+		_count--;
+		return shared_from_this();
+	}
+	if (root == NULL)
+	  return shared_from_this();
+  bool leafFlag = false;
+	std::shared_ptr<INode> n = root->without(hashId, 0, hash(key), key, leafFlag);
+	if (n != root)
+		root = n;
+	if(leafFlag)
+	  _count--;
+	return shared_from_this();
 }
 
-TransientMap *TransientMap::assoc_impl(std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val) {
+std::shared_ptr<TransientMap> TransientMap::assoc_impl(std::shared_ptr<const lisp_object> key, std::shared_ptr<const lisp_object> val) {
   ensureEditable();
   if (key == NULL) {
     if (nullValue != val)
@@ -1090,7 +1371,7 @@ TransientMap *TransientMap::assoc_impl(std::shared_ptr<const lisp_object> key, s
 			_count++;
 			hasNull = true;
 		}
-		return this;
+		return std::dynamic_pointer_cast<TransientMap>(shared_from_this());
   }
 	bool leafFlag = false;
 	std::shared_ptr<INode> n = (root == NULL ? std::const_pointer_cast<BitmapIndexedNode>(BitmapIndexedNode::Empty) : root)
@@ -1098,7 +1379,7 @@ TransientMap *TransientMap::assoc_impl(std::shared_ptr<const lisp_object> key, s
 	if (n != root)
 		root = n; 
 	if(leafFlag) _count++;
-	return this;
+	return std::dynamic_pointer_cast<TransientMap>(shared_from_this());
 }
 
 void TransientMap::ensureEditable() const {
@@ -1110,7 +1391,6 @@ void TransientMap::ensureEditable() const {
 int main() {
   std::cout << "Hello World!\n";
 }
-
 
 
 
