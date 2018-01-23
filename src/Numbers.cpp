@@ -1,30 +1,36 @@
+#include <algorithm>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
-#include <climits>
 #include <cassert>
+#include <cfloat>
+#include <climits>
+#include <cmath>
+#include <cstring>
 
 class Number {
   public:
     // virtual operator char() const = 0;
     // virtual operator int() const = 0;
     // virtual operator short() const = 0;
-    virtual operator long() const = 0;
+    virtual operator long() = 0;
     // virtual operator float() const = 0;
     virtual operator double() const = 0;
 };
 
 class BigDecimal;
 
-#define BITS_PER_BYTE 8
-#define BASE (1 << BITS_PER_BYTE)
+#define BASE (1 << CHAR_BIT)
 class BigInt : public Number {
   public:
     BigInt(long x);
     BigInt() = default;
-    virtual operator long() const;
+    virtual operator long();
     virtual operator double() const;
+    virtual operator std::string() const;
 
     bool operator==(const BigInt &y) const {return (sign == y.sign) && cmp(y);};
     BigInt operator+(const BigInt &y) const;
@@ -38,6 +44,7 @@ class BigInt : public Number {
     BigInt operator>>(int y) const;
     bool operator<(const BigInt &y) const;
     bool operator>(const BigInt &y) const;
+    BigInt abs() const;
 
     long signum(void) const;
     BigInt gcd(const BigInt &d) const;
@@ -58,7 +65,7 @@ class BigInt : public Number {
     static const BigInt ONE;
     static const BigInt TEN;
   private:
-    BigInt(size_t n) : array(n), sign(1), ndigits(1) {};
+    BigInt(size_t n, bool) : array(n), sign(1), ndigits(1) {};
     bool isOne(void) const;
     bool isPos(void) const;
     static size_t maxDigits(const BigInt &x, const BigInt &y);
@@ -89,7 +96,7 @@ BigInt::BigInt(long x) : array(sizeof(long)), sign(x<0 ? -1 : 1) {
     array[i] = 0;
 };
 
-BigInt::operator long() const {
+BigInt::operator long() {
   if(array.size() == 0)
     return 0;
   long ret = sign;
@@ -109,6 +116,23 @@ BigInt::operator double() const {
     ret += *it;
   }
   return ret;
+}
+
+BigInt::operator std::string() const {
+  std::stringstream ss;
+  BigInt q = *this;
+  size_t n = ndigits;
+  do {
+    int r = q.quotient(q, 10);
+    ss << "0123456789"[r];
+    while (n > 1 && q[n-1] == 0)
+			n--;
+  } while(n > 1 && q[0] != 0);
+  if(sign == -1)
+    ss << "-";
+  std::string s = ss.str();
+  reverse(s.begin(), s.end());
+  return s;
 }
 
 BigInt BigInt::operator+(const BigInt &y) const {
@@ -189,9 +213,9 @@ BigInt BigInt::operator%(const BigInt &y) const {
 BigInt BigInt::operator>>(unsigned long y) const {
   if(y > ndigits)
     return isPos() ? ZERO : -ONE;
-  BigInt ret((ndigits - y + BITS_PER_BYTE - 1) / BITS_PER_BYTE);
-  size_t offset = y / BITS_PER_BYTE;
-  size_t shift = y % BITS_PER_BYTE;
+  BigInt ret((ndigits - y + CHAR_BIT - 1) / CHAR_BIT);
+  size_t offset = y / CHAR_BIT;
+  size_t shift = y % CHAR_BIT;
   for(size_t i = 0; i+offset < array.size(); i++)
     ret[i] = array[i + offset] >> shift;
   ret.sign = sign;
@@ -209,6 +233,12 @@ bool BigInt::operator<(const BigInt &y) const {
 
 bool BigInt::operator>(const BigInt &y) const {
   return (*this - y).isPos();
+}
+
+BigInt BigInt::abs() const {
+  BigInt ret = *this;
+  ret.sign = 1;
+  return ret;
 }
 
 long BigInt::signum(void) const {
@@ -369,8 +399,8 @@ static int product(size_t n, unsigned char *z, const std::vector<unsigned char> 
 }
 
 void BigInt::div(const BigInt &y, BigInt *q, BigInt *r) const {
-  *q = BigInt(ndigits);
-  *r = BigInt(y.ndigits);
+  *q = BigInt(ndigits, true);
+  *r = BigInt(y.ndigits, true);
   unsigned char tmp[ndigits + y.ndigits + 2];
   size_t n = length();
   size_t m = y.length();
@@ -438,7 +468,7 @@ void BigInt::div(const BigInt &y, BigInt *q, BigInt *r) const {
 int BigInt::quotient(const BigInt &x, int y) {
   unsigned int carry = 0;
   for(int i=x.array.size()-1; i>=0; i--) {
-    carry = carry * BASE + x.array[i];
+    carry = carry * BASE + x[i];
     array[i] = carry / y;
     carry %= y;
   }
@@ -525,11 +555,15 @@ static const size_t THRESHOLDS_TABLE_COUNT = sizeof(THRESHOLDS_TABLE)/sizeof(THR
 
 class BigDecimal : public Number {
   public:
+    BigDecimal(double x);
+
     static BigDecimal valueOf(long val);
     static BigDecimal valueOf(long unscaledVal, int scale);
 
-    virtual operator long() const;
+    virtual operator long();
     virtual operator double() const;
+    virtual operator std::string() const;
+    BigInt toBigInt();
 
     int signum() const;
 
@@ -537,6 +571,7 @@ class BigDecimal : public Number {
   private:
     BigDecimal(BigInt intVal, long val, int scale, int prec) :
       intVal(intVal), intCompact(val), scale(scale), precision(prec) { };
+
     BigDecimal() = default;
 
     BigDecimal setScale(int newscale, roundingMode rm);
@@ -569,6 +604,54 @@ BigDecimal BigInt::toBigDecimal(int sign, int scale) const {
   return BigDecimal(BigInt(), (long)*this, scale, 0);
 }
 
+#define SIGN_BIT (((uint64_t) 1) << (CHAR_BIT * sizeof(double) - 1))
+#define EXPONENT_SHIFT (DBL_MANT_DIG - 1)
+#define EXPONENT_MASK ((1 << (CHAR_BIT * sizeof(double) - DBL_MANT_DIG)) - 1)
+#define EXPONENT(x) ((x) >> EXPONENT_SHIFT) & EXPONENT_MASK
+#define EXPONENT_BIAS 1023    // This should be deducible from cfloat, but I'm not sure how.
+#define FRACTION_MASK ((1L << EXPONENT_SHIFT) - 1)
+#define IMPLICIT_ONE (1L << EXPONENT_SHIFT)
+BigDecimal::BigDecimal(double val) {
+  if(!std::isfinite(val))
+    throw std::runtime_error("Infinite or Not a number");
+  static_assert(sizeof(double) == 8);
+  static_assert(sizeof(long) == 8);
+  uint64_t valBits;
+  memcpy(&valBits, &val, sizeof(val));
+  int sign = valBits & SIGN_BIT ? -1 : 1;
+  int exponent = (int) EXPONENT(valBits);
+  long significand = exponent==0 ? (valBits & FRACTION_MASK) << 1
+                                 : (valBits & FRACTION_MASK) | IMPLICIT_ONE;
+  exponent -= EXPONENT_BIAS + EXPONENT_SHIFT;
+  // At this point, val == sign * significand * 2**exponent.
+
+  if(significand == 0) {
+    intVal = BigInt::ZERO;
+    intCompact = 0;
+    precision = 1;
+    return;
+  }
+  
+  // Normalize
+  while((significand & 1) == 0) {
+    significand >>= 1;
+    exponent++;
+  }
+  
+  long s = sign * significand;
+  BigInt b;
+  if (exponent < 0) {
+    b = BigInt(2).pow(-exponent) * s;
+    scale = -exponent;
+  } else if (exponent > 0) {
+    b = BigInt(2).pow(exponent) * s;
+  } else {
+    b = BigInt(s);
+  }
+  intCompact = compactValFor(b);
+  intVal = (intCompact != INFLATED) ? BigInt() : b;
+}
+
 BigDecimal BigDecimal::valueOf(long val) {
   if(val != INFLATED)
     return BigDecimal(BigInt(), val, 0, 0);
@@ -583,11 +666,35 @@ BigDecimal BigDecimal::valueOf(long unscaledVal, int scale) {
   return BigDecimal(unscaledVal == INFLATED ? BigInt(unscaledVal) : BigInt(), unscaledVal, scale, 0);
 }
 
-BigDecimal::operator long() const {
-  // TODO
+BigDecimal::operator long() {
+  return (intCompact != INFLATED && scale == 0) ?
+    intCompact : (long)toBigInt();
+}
+
+BigInt BigDecimal::toBigInt() {
+  return setScale(0, ROUND_UNNECESSARY).inflate();
 }
 
 BigDecimal::operator double() const {
+  if (scale == 0 && intCompact != INFLATED)
+    return (double)intCompact;
+  return std::stod((std::string)*this);
+}
+
+BigDecimal::operator std::string() const {
+  if (scale == 0)                      // zero scale is trivial
+    return (intCompact != INFLATED) ? std::to_string(intCompact) : (std::string)intVal;
+  const char* coeff;
+  int offset = 0;
+  // Get the significand as an absolute value
+  if (intCompact != INFLATED) {
+    std::stringstream ss;
+    ss << intCompact;
+    coeff  = ss.str().c_str();
+  } else {
+    offset = 0;
+    coeff  = ((std::string)intVal.abs()).c_str();
+  }
   // TODO
 }
 
@@ -681,7 +788,7 @@ long BigDecimal::longMultiplyPowerTen(long val, int n) {
 }
 
 BigInt BigDecimal::bigTenToThe(int n) {
-  return BigInt((long)10).pow(BigInt((long)n));
+  return BigInt(10).pow(BigInt(n));
 }
 
 BigDecimal BigDecimal::divideAndRound(long ldividend, const BigInt bdividend, long ldivisor, const BigInt bdivisor,
@@ -718,7 +825,7 @@ BigDecimal BigDecimal::divideAndRound(long ldividend, const BigInt bdividend, lo
   if(!isRemainderZero) {
     switch(rm) {
       case ROUND_UNNECESSARY:
-        throw std::runtime_error("Rounding ecessary");
+        throw std::runtime_error("Rounding necessary");
       case ROUND_UP:
         increment = true;
       case ROUND_DOWN:
@@ -772,8 +879,10 @@ int BigDecimal::longCompareMagnitude(long x, long y) {
 }
 
 long BigDecimal::compactValFor(BigInt b) {
-  
-  // TODO
+  long lb = (long) b;
+  if(b == BigInt(lb))
+    return lb;
+  return INFLATED;
 }
 
 
@@ -811,13 +920,10 @@ class Ops {
   	virtual bool lt(Number x, Number y);
   	virtual bool lte(Number x, Number y);
   	virtual bool gte(Number x, Number y);
-
   	virtual Number negate(Number x);
   	virtual Number negateP(Number x);
-
   	virtual Number inc(Number x);
   	virtual Number incP(Number x);
-
   	virtual Number dec(Number x);
   	virtual Number decP(Number x);
   	*/
@@ -944,18 +1050,30 @@ std::shared_ptr<const Number> divide(BigInt n, BigInt d) {
   // TODO requires Ratio
 }
 
-double quotient(double x, double y) {
-  // TODO requires BigDecimal and BigInt
+double quotient(double n, double d) {
+  if(d == 0)
+    throw std::domain_error("Divide by zero error.");
+
+	double q = n / d;
+	if(q <= LONG_MAX && q >= LONG_MIN)
+		return (double)(long) q;
+	return (double) BigDecimal(q).toBigInt();
 }
-double remainder(double x, double y) {
-  // TODO requires BigDecimal and BigInt
+double remainder(double n, double d) {
+  if(d == 0)
+    throw std::domain_error("Divide by zero error.");
+
+	double q = n / d;
+	if(q <= LONG_MAX && q >= LONG_MIN)
+	  return n - ((long)q) * d;
+	return n - ((double)BigDecimal(q).toBigInt()) * d;
 }
 
 BigInt toBigInt(std::shared_ptr<const Number> x) {
   std::shared_ptr<const BigInt> bx = std::dynamic_pointer_cast<const BigInt>(x);
   if(bx)
     return *bx;
-  return BigInt((long) *x);
+  return BigInt(*x);
 }
 
 
@@ -1124,3 +1242,19 @@ std::shared_ptr<const Number> BigIntOps::remainder(std::shared_ptr<const Number>
 bool BigIntOps::equiv(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
   return toBigInt(x) == toBigInt(y);
 }
+
+int main() {
+  std::cout << "Hello World!\n";
+}
+
+
+
+
+
+
+
+
+
+
+
+
