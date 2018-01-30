@@ -29,8 +29,12 @@ static inline int clz (unsigned int x) {
   return __builtin_clz(x);
 }
 
+class lisp_object {
+  public:
+    virtual ~lisp_object() = default;
+};
 
-class Number {
+class Number : public lisp_object {
   public:
     // virtual operator char() const = 0;
     // virtual operator int() const = 0;
@@ -38,6 +42,26 @@ class Number {
     virtual operator long() = 0;
     // virtual operator float() const = 0;
     virtual operator double() const = 0;
+};
+
+class Integer : public Number {
+  public:
+    Integer(long val) : val(val) {};
+
+    virtual operator long() {return val;};
+    virtual operator double() const {return (double) val;};
+  private:
+    const long val;
+};
+
+class Float : public Number {
+  public:
+    Float(double val) : val(val) {};
+
+    virtual operator long() {return (long) val;};
+    virtual operator double() const {return val;};
+  private:
+    const double val;
 };
 
 class BigDecimal;
@@ -581,6 +605,7 @@ static const long LONG_TEN_POWERS_TABLE[] = {
   100000000000000000L,   // 17 / 10^17
   1000000000000000000L   // 18 / 10^18
 };
+static const size_t LONG_TEN_POWERS_TABLE_COUNT = sizeof(LONG_TEN_POWERS_TABLE)/sizeof(LONG_TEN_POWERS_TABLE[0]);
 static const long THRESHOLDS_TABLE[] = {
   LONG_MAX,                     // 0
   LONG_MAX/10L,                 // 1
@@ -603,6 +628,8 @@ static const long THRESHOLDS_TABLE[] = {
   LONG_MAX/1000000000000000000L // 18
 };
 static const size_t THRESHOLDS_TABLE_COUNT = sizeof(THRESHOLDS_TABLE)/sizeof(THRESHOLDS_TABLE[0]);
+static_assert(LONG_TEN_POWERS_TABLE_COUNT == THRESHOLDS_TABLE_COUNT, "LONG_TEN_POWERS_TABLE and THRESHOLDS_TABLE are different sizes.");
+static_assert(sizeof(long) <= 8, "LONG_TEN_POWERS_TABLE and THRESHOLDS_TABLE are not large enough.  They are only designed for up to 64 bit longs.");
 
 class BigDecimal : public Number {
   public:
@@ -619,23 +646,28 @@ class BigDecimal : public Number {
     virtual operator std::string() const;
 
     bool operator==(BigDecimal &y);
+    bool equiv(BigDecimal &y);
     BigDecimal operator+(BigDecimal &y);
     BigDecimal operator-() const;
     BigDecimal operator-(const BigDecimal &y) const;
     BigDecimal operator*(BigDecimal &y);
     // BigDecimal operator*(const long &y) const;
-    BigDecimal operator/(const BigDecimal &y) const;
-    BigDecimal operator%(const BigDecimal &y) const;
-    bool operator<(const BigDecimal &y) const;
-    bool operator<=(const BigDecimal &y) const;
-    bool operator>(const BigDecimal &y) const;
-    bool operator>=(const BigDecimal &y) const;
+    BigDecimal operator/(BigDecimal &y);
+    BigDecimal operator%(BigDecimal &y);
+    BigDecimal divideToIntegralValue(BigDecimal &y);
+    BigDecimal divide(BigDecimal &y, int mcPrecision, roundingMode rm);
+    bool operator<(BigDecimal &y);
+    bool operator<=(BigDecimal &y);
+    bool operator>(BigDecimal &y);
+    bool operator>=(BigDecimal &y);
     BigDecimal abs() const;
 
     BigInt toBigInt();
 
     int signum() const;
     int getPrecision();
+    int getScale() const;
+    int unscaledValue();
 
     static const BigDecimal ONE;
   private:
@@ -649,7 +681,8 @@ class BigDecimal : public Number {
     int checkScale(long val) const;
     BigInt bigMultiplyPowerTen(int n);
     BigDecimal stripZerosToMatchScale(long preferredScale);
-    // int compareMagnitude(BigDecimal val);
+    int compareMagnitude(BigDecimal &val);
+    int cmp(BigDecimal &y);
 
     BigInt intVal;
     long intCompact;
@@ -664,11 +697,50 @@ class BigDecimal : public Number {
     static long compactValFor(BigInt b);
     static int longDigitLength(long x);
     static int bigDigitLength(BigInt b);
+    static int saturateLong(long s);
+    static BigDecimal doRound(BigDecimal &d, int mcPrecision, roundingMode rm);
     
     static const long INFLATED = LONG_MIN;
-    
+    static const std::vector<BigDecimal> zeroThroughTen;
+    static const std::vector<BigDecimal> ZERO_SCALED_BY;
+
     friend BigDecimal BigInt::toBigDecimal(int sign, int scale) const;
 };
+
+const std::vector<BigDecimal> BigDecimal::zeroThroughTen({
+  BigDecimal(BigInt::ZERO,  0,  0, 1),
+  BigDecimal(BigInt::ONE,   1,  0, 1),
+  BigDecimal(BigInt(2),     2,  0, 1),
+  BigDecimal(BigInt(3),     3,  0, 1),
+  BigDecimal(BigInt(4),     4,  0, 1),
+  BigDecimal(BigInt(5),     5,  0, 1),
+  BigDecimal(BigInt(6),     6,  0, 1),
+  BigDecimal(BigInt(7),     7,  0, 1),
+  BigDecimal(BigInt(8),     8,  0, 1),
+  BigDecimal(BigInt(9),     9,  0, 1),
+  BigDecimal(BigInt::TEN,   10, 0, 2),
+});
+
+const std::vector<BigDecimal> BigDecimal::ZERO_SCALED_BY({
+  zeroThroughTen[0],
+  BigDecimal(BigInt::ZERO, 0, 1, 1),
+  BigDecimal(BigInt::ZERO, 0, 2, 1),
+  BigDecimal(BigInt::ZERO, 0, 3, 1),
+  BigDecimal(BigInt::ZERO, 0, 4, 1),
+  BigDecimal(BigInt::ZERO, 0, 5, 1),
+  BigDecimal(BigInt::ZERO, 0, 6, 1),
+  BigDecimal(BigInt::ZERO, 0, 7, 1),
+  BigDecimal(BigInt::ZERO, 0, 8, 1),
+  BigDecimal(BigInt::ZERO, 0, 9, 1),
+  BigDecimal(BigInt::ZERO, 0, 10, 1),
+  BigDecimal(BigInt::ZERO, 0, 11, 1),
+  BigDecimal(BigInt::ZERO, 0, 12, 1),
+  BigDecimal(BigInt::ZERO, 0, 13, 1),
+  BigDecimal(BigInt::ZERO, 0, 14, 1),
+  BigDecimal(BigInt::ZERO, 0, 15, 1),
+});
+
+
 
 BigDecimal BigInt::toBigDecimal(int sign, int scale) const {
   if(isZero())
@@ -800,6 +872,10 @@ bool BigDecimal::operator==(BigDecimal &y) {
   return inflate() == y.inflate();
 }
 
+bool BigDecimal::equiv(BigDecimal &y) {
+  return cmp(y) == 0;
+}
+
 BigDecimal BigDecimal::operator+(BigDecimal &y) {
   long xs = intCompact;
   long ys = y.intCompact;
@@ -881,34 +957,81 @@ BigDecimal BigDecimal::operator*(BigDecimal &y) {
   return BigDecimal(rb, INFLATED, productScale, 0);
 }
 
-BigDecimal BigDecimal::operator/(const BigDecimal &y) const {
-  // TODO
+BigDecimal BigDecimal::operator/(BigDecimal &divisor) {
+  // Handle zero cases first.
+  if (divisor.signum() == 0) {   // x/0
+    if (signum() == 0)    // 0/0
+      throw std::domain_error("Division undefined.");
+    throw std::domain_error("Divide by zero error.");
+  }
+  // Calculate preferred scale
+  int preferredScale = saturateLong((long)scale - divisor.scale);
+  if (signum() == 0)        // 0/y
+    return (preferredScale >= 0 && preferredScale < ZERO_SCALED_BY.size()) ?
+      ZERO_SCALED_BY[preferredScale] :
+      valueOf(0, preferredScale);
+  inflate();
+  divisor.inflate();
+  int precision = (int)std::min(getPrecision() + (long)ceil(10.0*divisor.getPrecision()/3.0),
+                                (long)INT_MAX);
+  BigDecimal quotient;
+  try {
+    quotient = divide(divisor, precision, ROUND_UNNECESSARY);
+  } catch (const std::runtime_error&) {
+    throw std::runtime_error("Non-terminating decimal expansion; no exact representable decimal result.");
+  }
+  int quotientScale = quotient.scale;
+  if (preferredScale > quotientScale)
+    return quotient.setScale(preferredScale, ROUND_UNNECESSARY);
+  return quotient;
 }
 
-BigDecimal BigDecimal::operator%(const BigDecimal &y) const {
-  // TODO
+BigDecimal BigDecimal::operator%(BigDecimal &y) {
+  BigDecimal quotient = divideToIntegralValue(y);
+  return *this - (quotient * y);
 }
 
-bool BigDecimal::operator<(const BigDecimal &y) const {
-  // TODO
+BigDecimal BigDecimal::divideToIntegralValue(BigDecimal &y) {
+  int preferredScale = saturateLong((long)scale - y.scale);
+  if (compareMagnitude(y) < 0) {
+    // much faster when this << divisor
+    return BigDecimal::valueOf(0, preferredScale);
+  }
+  if(signum() == 0 && y.signum() != 0)
+    return setScale(preferredScale, ROUND_UNNECESSARY);
+  
+  int maxDigits = (int)std::min(getPrecision() + (long)std::ceil(10.0*y.getPrecision()/3.0)
+                                               + std::abs((long)scale - y.scale) + 2,
+                                (long)INT_MAX);
+  BigDecimal quotient = divide(y, maxDigits, ROUND_DOWN);
+  if (quotient.scale > 0) {
+    quotient = quotient.setScale(0, ROUND_DOWN);
+    quotient.stripZerosToMatchScale(preferredScale);
+  }
+  if (quotient.scale < preferredScale)
+    quotient = quotient.setScale(preferredScale, ROUND_UNNECESSARY);
+  return quotient;
 }
 
-bool BigDecimal::operator<=(const BigDecimal &y) const {
-  // TODO
+bool BigDecimal::operator<(BigDecimal &y) {
+  return cmp(y) < 0;
 }
 
-bool BigDecimal::operator>(const BigDecimal &y) const {
-  // TODO
+bool BigDecimal::operator<=(BigDecimal &y) {
+  return cmp(y) <= 0;
 }
 
-bool BigDecimal::operator>=(const BigDecimal &y) const {
-  // TODO
+bool BigDecimal::operator>(BigDecimal &y) {
+  return cmp(y) > 0;
+}
+
+bool BigDecimal::operator>=(BigDecimal &y) {
+  return cmp(y) >= 0;
 }
 
 BigDecimal BigDecimal::abs() const {
   return signum() < 0 ? -*this : *this;
 }
-
 
 int BigDecimal::signum() const {
   if(intCompact != INFLATED) {
@@ -928,6 +1051,14 @@ int BigDecimal::getPrecision() {
   return precision;
 }
 
+int BigDecimal::getScale() const {
+  return scale;
+}
+
+int BigDecimal::unscaledValue() {
+  return inflate();
+}
+
 const BigDecimal BigDecimal::ONE = BigDecimal(BigInt::ONE, 1, 0, 1);
 
 BigDecimal BigDecimal::setScale(int newscale, roundingMode rm) {
@@ -945,7 +1076,7 @@ BigDecimal BigDecimal::setScale(int newscale, roundingMode rm) {
     return BigDecimal(rb, rs, newscale, (precision > 0) ? precision + raise : 0);
   }
   int drop = checkScale((long)oldscale - newscale);
-  if(drop < THRESHOLDS_TABLE_COUNT)
+  if(drop < LONG_TEN_POWERS_TABLE_COUNT)
     return divideAndRound(rs, intVal, LONG_TEN_POWERS_TABLE[drop], BigInt(), newscale, rm, newscale);
   return divideAndRound(rs, intVal, INFLATED, bigTenToThe(drop), newscale, rm, newscale);
 }
@@ -997,17 +1128,94 @@ BigDecimal BigDecimal::stripZerosToMatchScale(long preferredScale) {
   return *this;
 }
 
-
-/*
-int BigDecimal::compareMagnitude(BigDecimal val) {
-  // TODO
+BigDecimal BigDecimal::divide(BigDecimal &y, int mcPrecision, roundingMode rm) {
+  if (mcPrecision == 0)
+    return *this / y;
+  long preferredScale = (long)scale - y.scale;
+  if (y.signum() == 0) {   // x/0
+    if (signum() == 0)    // 0/0
+      throw std::domain_error("Division undefined.");
+    throw std::domain_error("Divide by zero error.");
+  }
+  if (signum() == 0)        // 0/y
+    return BigDecimal(BigInt::ZERO, 0, saturateLong(preferredScale), 1);
+  int xscale = getPrecision();
+  int yscale = y.getPrecision();
+  BigDecimal dividend(dividend.intVal, dividend.intCompact, xscale, xscale);
+  BigDecimal divisor (divisor.intVal,  divisor.intCompact,  yscale, yscale);
+  if (dividend.compareMagnitude(divisor) > 0) // satisfy constraint (b)
+    yscale = divisor.scale -= 1;
+  int scl = checkScale(preferredScale + yscale - xscale + mcPrecision);
+  if (checkScale((long)mcPrecision + yscale) > xscale)
+    dividend = dividend.setScale(mcPrecision + yscale, ROUND_UNNECESSARY);
+  else
+    divisor = divisor.setScale(checkScale((long)xscale - mcPrecision), ROUND_UNNECESSARY);
+  BigDecimal quotient = divideAndRound(dividend.intCompact, dividend.intVal, divisor.intCompact,
+                                       divisor.intVal, scl, rm, checkScale(preferredScale));
+  quotient = doRound(quotient, mcPrecision, rm);
+  return quotient;
 }
-*/
+
+int BigDecimal::compareMagnitude(BigDecimal &val) {
+  long ys = val.intCompact;
+  long xs = intCompact;
+  if (xs == 0)
+    return (ys == 0) ? 0 : -1;
+  if (ys == 0)
+    return 1;
+  int sdiff = scale - val.scale;
+  if (sdiff != 0) {
+    int xae = getPrecision() - scale;           // [-1]
+    int yae = val.getPrecision() - val.scale;   // [-1]
+    if (xae < yae)
+      return -1;
+    if (xae > yae)
+      return 1;
+    if (sdiff < 0) {
+      if( (xs == INFLATED ||
+          (xs = longMultiplyPowerTen(xs, -sdiff)) == INFLATED) &&
+          ys == INFLATED) {
+        BigInt rb = bigMultiplyPowerTen(-sdiff);
+        return rb.cmp(val.intVal);
+      }
+    } else { // sdiff > 0
+      if( (ys == INFLATED ||
+          (ys = longMultiplyPowerTen(ys, sdiff)) == INFLATED) &&
+          xs == INFLATED) {
+        BigInt rb = val.bigMultiplyPowerTen(sdiff);
+        return intVal.cmp(rb);
+      }
+    }
+  }
+  if (xs != INFLATED)
+    return (ys != INFLATED) ? longCompareMagnitude(xs, ys) : -1;
+  if (ys != INFLATED)
+    return 1;
+  return intVal.cmp(val.intVal);
+}
+
+int BigDecimal::cmp(BigDecimal &y) {
+  if (scale == y.scale) {
+    long xs = intCompact;
+    long ys = y.intCompact;
+    if (xs != INFLATED && ys != INFLATED)
+      return xs != ys ? ((xs > ys) ? 1 : -1) : 0;
+  }
+
+  int xsign = signum();
+  int ysign = y.signum();
+  if (xsign != ysign)
+    return (xsign > ysign) ? 1 : -1;
+  if (xsign == 0)
+    return 0;
+  int cmp = compareMagnitude(y);
+  return (xsign > 0) ? cmp : -cmp;
+}
 
 long BigDecimal::longMultiplyPowerTen(long val, int n) {
   if (val == 0 || n <= 0)
     return val;
-  if (n < THRESHOLDS_TABLE_COUNT) {
+  if (n < LONG_TEN_POWERS_TABLE_COUNT) {
     long tenpower = LONG_TEN_POWERS_TABLE[n];
     if (val == 1)
       return tenpower;
@@ -1116,7 +1324,25 @@ long BigDecimal::compactValFor(BigInt b) {
 }
 
 int BigDecimal::longDigitLength(long x) {
-  // TODO
+  assert(x != INFLATED);
+  if (x < 0)
+    x = -x;
+  if (x < 10) // must screen for 0, might as well 10
+    return 1;
+  size_t n = sizeof(long) * CHAR_BIT;
+  long y = x;
+  size_t rshift = 0;
+  for(size_t lshift = n >> 1; lshift > 1; lshift >>= 1) {
+    rshift += lshift;
+    if((y >> rshift) == 0) {
+      n -= lshift;
+      y <<= lshift;
+    }
+  }
+  // log 10 of x is within 1 of (1233/4096)* (1 + integer log 2 of x)
+  int r = (((y >> (rshift + 1)) + n) * 1233) >> 12;
+  // if r >= length, must have max possible digits for long
+  return (r >= LONG_TEN_POWERS_TABLE_COUNT || x < LONG_TEN_POWERS_TABLE[r])? r : r+1;
 }
 
 int BigDecimal::bigDigitLength(BigInt b) {
@@ -1129,6 +1355,67 @@ int BigDecimal::bigDigitLength(BigInt b) {
     return 1;
   int r = (int)((((long)b.bitLength() + 1) * 646456993) >> 31);
   return b.cmp(bigTenToThe(r)) < 0 ? r : r + 1;
+}
+
+int BigDecimal::saturateLong(long s) {
+  int i = (int)s;
+  return (s == i) ? i : (s < 0 ? INT_MIN : INT_MAX);
+}
+
+BigDecimal BigDecimal::doRound(BigDecimal &d, int mcPrecision, roundingMode rm) {
+  int drop;
+  // This might (rarely) iterate to cover the 999=>1000 case
+  while ((drop = d.getPrecision() - mcPrecision) > 0) {
+    int newScale = d.checkScale((long)d.scale - drop);
+    if(drop < LONG_TEN_POWERS_TABLE_COUNT)
+      d = divideAndRound(d.intCompact, d.intVal, LONG_TEN_POWERS_TABLE[drop], BigInt(), newScale, rm, newScale);
+    else
+      d = divideAndRound(d.intCompact, d.intVal, INFLATED, bigTenToThe(drop), newScale, rm, newScale);
+  }
+  return d;
+}
+
+
+// Ratio
+class Ratio : public Number {
+  public:
+    Ratio(BigInt numerator, BigInt denominator) : numerator(numerator), denominator(denominator) {};
+    const BigInt numerator;
+    const BigInt denominator;
+    
+    virtual operator long();
+    virtual operator double() const;
+    virtual operator std::string() const;
+    BigInt toBigInt() const;
+    BigDecimal toBigDecimal() const;
+    BigDecimal toBigDecimal(int precision, roundingMode rm) const;
+};
+
+Ratio::operator long() {
+  return (long)toBigInt();
+}
+
+Ratio::operator double() const {
+  return (double)toBigDecimal(16, ROUND_HALF_EVEN);
+}
+
+Ratio::operator std::string() const {
+  return (std::string)numerator + "/" + (std::string)denominator;
+}
+
+BigInt Ratio::toBigInt() const {
+  return numerator / denominator;
+}
+
+BigDecimal Ratio::toBigDecimal() const {
+  return toBigDecimal(0, ROUND_HALF_UP);
+}
+
+BigDecimal Ratio::toBigDecimal(int precision, roundingMode rm) const {
+  BigDecimal numerator(this->numerator);
+	BigDecimal denominator(this->denominator);
+
+	return numerator.divide(denominator, precision, rm);
 }
 
 
@@ -1175,6 +1462,7 @@ class Ops {
 };
 
 class OpsP : public Ops {
+  public:
   	virtual std::shared_ptr<const Number> addP(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
   	  return add(x, y);
   	};
@@ -1193,7 +1481,7 @@ class OpsP : public Ops {
 };
 
 class LongOps : public Ops {
-  private:
+  public:
     virtual const Ops &combine(const Ops&) const;
     virtual const Ops &opsWith(const LongOps&) const;
   	virtual const Ops &opsWith(const RatioOps&) const;
@@ -1226,10 +1514,12 @@ class LongOps : public Ops {
   	virtual std::shared_ptr<const Number> incP(std::shared_ptr<const Number> x) const;
   	virtual std::shared_ptr<const Number> dec(std::shared_ptr<const Number> x) const;
   	virtual std::shared_ptr<const Number> decP(std::shared_ptr<const Number> x) const;
+  private:
+    static long gcd(long u, long v);
 };
 
 class DoubleOps : public OpsP {
-  private:
+  public:
     virtual const Ops &combine(const Ops&) const;
     virtual const Ops &opsWith(const LongOps&) const;
   	virtual const Ops &opsWith(const RatioOps&) const;
@@ -1321,19 +1611,65 @@ class BigDecimalOps : public OpsP {
   	virtual std::shared_ptr<const Number> dec(std::shared_ptr<const Number> x) const;
 };
 
+class RatioOps : public OpsP {
+  public:
+    virtual const Ops &combine(const Ops&) const;
+    virtual const Ops &opsWith(const LongOps&) const;
+  	virtual const Ops &opsWith(const RatioOps&) const;
+  	virtual const Ops &opsWith(const DoubleOps&) const;
+  	virtual const Ops &opsWith(const BigIntOps&) const;
+  	virtual const Ops &opsWith(const BigDecimalOps&) const;
+
+    virtual bool isZero(std::shared_ptr<const Number> x) const;
+  	virtual bool isPos(std::shared_ptr<const Number> x) const;
+  	virtual bool isNeg(std::shared_ptr<const Number> x) const;
+
+  	virtual std::shared_ptr<const Number> add(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const;
+
+  	virtual std::shared_ptr<const Number> multiply(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const;
+
+  	virtual std::shared_ptr<const Number> divide(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const;
+  	virtual std::shared_ptr<const Number> quotient(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const;
+  	virtual std::shared_ptr<const Number> remainder(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const;
+
+  	virtual bool equiv(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const;
+  	virtual bool lt(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const;
+  	virtual bool lte(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const;
+  	virtual bool gte(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const;
+
+  	virtual std::shared_ptr<const Number> negate(std::shared_ptr<const Number> x) const;
+  	virtual std::shared_ptr<const Number> inc(std::shared_ptr<const Number> x) const;
+  	virtual std::shared_ptr<const Number> dec(std::shared_ptr<const Number> x) const;
+};
+
 static const LongOps LONG_OPS = LongOps();
 static const DoubleOps DOUBLE_OPS = DoubleOps();
 static const BigIntOps BIGINT_OPS = BigIntOps();
 static const BigDecimalOps BIGDECIMAL_OPS = BigDecimalOps();
+static const RatioOps RATIO_OPS = RatioOps();
 
 
 // Helper Functions
-std::shared_ptr<const Number> num(long) {
-  // TODO   requires Integer
+const Ops& ops(std::shared_ptr<const lisp_object> x) {
+	if(std::dynamic_pointer_cast<const Integer>(x))
+		return LONG_OPS;
+	if(std::dynamic_pointer_cast<const Float>(x))
+		return DOUBLE_OPS;
+	if(std::dynamic_pointer_cast<const BigInt>(x))
+		return BIGINT_OPS;
+	if(std::dynamic_pointer_cast<const Ratio>(x))
+		return RATIO_OPS;
+	if(std::dynamic_pointer_cast<const BigDecimal>(x))
+		return BIGDECIMAL_OPS;
+	return LONG_OPS;
 }
 
-std::shared_ptr<const Number> num(double) {
-  // TODO   requires float
+std::shared_ptr<const Number> num(long x) {
+  return std::make_shared<const Integer>(x);
+}
+
+std::shared_ptr<const Number> num(double x) {
+  return std::make_shared<const Float>(x);
 }
 
 long add(long x, long y) {
@@ -1342,6 +1678,14 @@ long add(long x, long y) {
     throw std::overflow_error("Integer Overflow");
   return ret;
 }
+
+std::shared_ptr<const Number> minus(std::shared_ptr<const lisp_object> x, std::shared_ptr<const lisp_object> y) {
+  std::shared_ptr<const Number> nx =std::dynamic_pointer_cast<const Number>(x);
+  std::shared_ptr<const Number> ny =std::dynamic_pointer_cast<const Number>(y);
+	const Ops &yops = ops(y);
+	return ops(x).combine(yops).add(nx, yops.negate(ny));
+}
+
 long multiply(long x, long y) {
   if(x == LONG_MIN && y < 0)
     throw std::overflow_error("Integer Overflow");
@@ -1349,6 +1693,12 @@ long multiply(long x, long y) {
   if(y != 0 && ret/y != x)
     throw std::overflow_error("Integer Overflow");
   return ret;
+}
+
+std::shared_ptr<const Number> multiply(std::shared_ptr<const lisp_object> x, std::shared_ptr<const lisp_object> y) {
+  std::shared_ptr<const Number> nx =std::dynamic_pointer_cast<const Number>(x);
+  std::shared_ptr<const Number> ny =std::dynamic_pointer_cast<const Number>(y);
+	return ops(x).combine(ops(y)).multiply(nx, ny);
 }
 
 std::shared_ptr<const Number> divide(BigInt n, BigInt d) {
@@ -1363,7 +1713,7 @@ std::shared_ptr<const Number> divide(BigInt n, BigInt d) {
     return std::make_shared<const BigInt>(n);
   if(d == -BigInt::ONE)
     return std::make_shared<const BigInt>(-n);
-  // TODO requires Ratio
+  return std::make_shared<const Ratio>((d.signum() < 0 ? -n : n),(d.signum() < 0 ? -d : d));
 }
 
 double quotient(double n, double d) {
@@ -1375,6 +1725,7 @@ double quotient(double n, double d) {
 		return (double)(long) q;
 	return (double) BigDecimal(q).toBigInt();
 }
+
 double remainder(double n, double d) {
   if(d == 0)
     throw std::domain_error("Divide by zero error.");
@@ -1402,6 +1753,23 @@ BigDecimal toBigDecimal(std::shared_ptr<const Number> x) {
   return BigDecimal((double) *x);
 }
 
+Ratio toRatio(std::shared_ptr<const Number> x){
+	std::shared_ptr<const Ratio> rx = std::dynamic_pointer_cast<const Ratio>(x);
+	if(rx)
+	  return *rx;
+	std::shared_ptr<const BigDecimal> bdx = std::dynamic_pointer_cast<const BigDecimal>(x);
+	if(bdx) {
+	  BigDecimal bx = *bdx;
+	  BigInt bv = bx.unscaledValue();
+		int scale = bx.getScale();
+		if(scale < 0)
+			return Ratio(bv * BigInt::TEN.pow(-scale), BigInt::ONE);
+		else
+			return Ratio(bv, BigInt::TEN.pow(scale));
+		}
+	return Ratio(toBigInt(x), BigInt::ONE);
+}
+
 // LongOps
 const Ops &LongOps::combine(const Ops &y) const {
   return y.opsWith(*this);
@@ -1410,7 +1778,7 @@ const Ops &LongOps::opsWith(const LongOps &x) const {
   return *this;
 }
 const Ops &LongOps::opsWith(const RatioOps&) const {
-  // TODO requires Ratio
+  return RATIO_OPS;
 }
 const Ops &LongOps::opsWith(const DoubleOps &x) const {
   return DOUBLE_OPS;
@@ -1459,7 +1827,21 @@ std::shared_ptr<const Number> LongOps::multiplyP(std::shared_ptr<const Number> x
 }
 
 std::shared_ptr<const Number> LongOps::divide(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
-  // TODO   requires Ratio
+  long n = (long) *x;
+	long val = (long) *y;
+	long gcd_ = gcd(n, val);
+	if(gcd_ == 0)
+		return num((long)0);
+
+	n = n / gcd_;
+	long d = val / gcd_;
+	if(d == 1)
+		return num(n);
+	if(d < 0) {
+		n = -n;
+		d = -d;
+	}
+	return std::make_shared<const Ratio>(BigInt(n), BigInt(d));
 }
 std::shared_ptr<const Number> LongOps::quotient(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
   return num((long)*x / (long)*y);
@@ -1516,6 +1898,14 @@ std::shared_ptr<const Number> LongOps::decP(std::shared_ptr<const Number> x) con
   return num(val - 1);
 }
 
+long LongOps::gcd(long u, long v) {
+  while(v != 0) {
+		long r = u % v;
+		u = v;
+		v = r;
+	}
+	return u;
+}
 
 
 // DoubleOps
@@ -1603,7 +1993,7 @@ const Ops &BigIntOps::opsWith(const LongOps&) const {
   return *this;
 }
 const Ops &BigIntOps::opsWith(const RatioOps&) const {
-  // TODO requires Ratio
+  return RATIO_OPS;
 }
 const Ops &BigIntOps::opsWith(const DoubleOps&) const {
   return DOUBLE_OPS;
@@ -1715,52 +2105,168 @@ std::shared_ptr<const Number> BigDecimalOps::add(std::shared_ptr<const Number> x
 }
 
 std::shared_ptr<const Number> BigDecimalOps::multiply(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
-  // TODO
+  BigDecimal ret = toBigDecimal(x) * toBigDecimal(y);
+  return std::make_shared<const BigDecimal>(ret);
 }
 
 std::shared_ptr<const Number> BigDecimalOps::divide(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
-  // TODO
+  BigDecimal ret = toBigDecimal(x) / toBigDecimal(y);
+  return std::make_shared<const BigDecimal>(ret);
 }
 std::shared_ptr<const Number> BigDecimalOps::quotient(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
-  // TODO
+  BigDecimal numerator = toBigDecimal(x);
+  BigDecimal denominator = toBigDecimal(y);
+  BigDecimal ret = numerator.divideToIntegralValue(denominator);
+  return std::make_shared<const BigDecimal>(ret);
 }
 std::shared_ptr<const Number> BigDecimalOps::remainder(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
-  // TODO
+  BigDecimal ret = toBigDecimal(x) % toBigDecimal(y);
+  return std::make_shared<const BigDecimal>(ret);
 }
 
 bool BigDecimalOps::equiv(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
-  // TODO
+  BigDecimal second = toBigDecimal(y);
+  return toBigDecimal(x).equiv(second);
 }
 
 bool BigDecimalOps::lt(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
-  // TODO
+  return toBigDecimal(x) < toBigDecimal(y);
 }
 
 bool BigDecimalOps::lte(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
-  // TODO
+  return toBigDecimal(x) <= toBigDecimal(y);
 }
 
 bool BigDecimalOps::gte(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
-  // TODO
+  return toBigDecimal(x) >= toBigDecimal(y);
 }
 
 std::shared_ptr<const Number> BigDecimalOps::negate(std::shared_ptr<const Number> x) const {
-  // TODO
+  BigDecimal ret = -toBigDecimal(x);
+  return std::make_shared<const BigDecimal>(ret);
 }
 
 std::shared_ptr<const Number> BigDecimalOps::inc(std::shared_ptr<const Number> x) const {
-  // TODO
+  BigDecimal ret = toBigDecimal(x) + BigDecimal::ONE;
+  return std::make_shared<const BigDecimal>(ret);
 }
 
 std::shared_ptr<const Number> BigDecimalOps::dec(std::shared_ptr<const Number> x) const {
-  // TODO
+  BigDecimal ret = toBigDecimal(x) - BigDecimal::ONE;
+  return std::make_shared<const BigDecimal>(ret);
+}
+
+
+// RatioOps
+const Ops &RatioOps::combine(const Ops &y) const {
+  return y.opsWith(*this);
+}
+const Ops &RatioOps::opsWith(const LongOps &) const {
+  return *this;
+}
+const Ops &RatioOps::opsWith(const RatioOps&) const {
+  return *this;
+}
+const Ops &RatioOps::opsWith(const DoubleOps&) const {
+  return DOUBLE_OPS;
+}
+const Ops &RatioOps::opsWith(const BigIntOps&) const {
+  return *this;
+}
+const Ops &RatioOps::opsWith(const BigDecimalOps&) const {
+  return BIGDECIMAL_OPS;
+}
+
+bool RatioOps::isZero(std::shared_ptr<const Number> x) const {
+  Ratio r = toRatio(x);
+  return r.numerator.signum() == 0;
+}
+bool RatioOps::isPos(std::shared_ptr<const Number> x) const {
+  Ratio r = toRatio(x);
+  return r.numerator.signum() > 0;
+}
+bool RatioOps::isNeg(std::shared_ptr<const Number> x) const {
+  Ratio r = toRatio(x);
+  return r.numerator.signum() < 0;
+}
+
+std::shared_ptr<const Number> RatioOps::add(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
+  Ratio rx = toRatio(x);
+	Ratio ry = toRatio(y);
+	return  ::divide((ry.numerator * rx.denominator) + (rx.numerator * ry.denominator), ry.denominator * rx.denominator);
+}
+
+std::shared_ptr<const Number> RatioOps::multiply(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
+  Ratio rx = toRatio(x);
+	Ratio ry = toRatio(y);
+	return  ::divide(rx.numerator * ry.numerator, rx.denominator * ry.denominator);
+}
+
+std::shared_ptr<const Number> RatioOps::divide(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
+  Ratio rx = toRatio(x);
+	Ratio ry = toRatio(y);
+	return  ::divide(rx.numerator * ry.denominator, rx.denominator * ry.numerator);
+}
+
+std::shared_ptr<const Number> RatioOps::quotient(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
+  Ratio rx = toRatio(x);
+	Ratio ry = toRatio(y);
+	BigInt q = (rx.numerator * ry.denominator) / (rx.denominator * ry.numerator);
+	return std::make_shared<const BigInt>(q);
+}
+
+std::shared_ptr<const Number> RatioOps::remainder(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
+  Ratio rx = toRatio(x);
+	Ratio ry = toRatio(y);
+	BigInt q = (rx.numerator * ry.denominator) / (rx.denominator * ry.numerator);
+	return ::minus(x, ::multiply(std::make_shared<const BigInt>(q), y));
+}
+
+bool RatioOps::equiv(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
+  Ratio rx = toRatio(x);
+	Ratio ry = toRatio(y);
+	return (rx.numerator == ry.numerator) && (rx.denominator == ry.denominator);
+}
+
+bool RatioOps::lt(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
+  Ratio rx = toRatio(x);
+	Ratio ry = toRatio(y);
+	return rx.numerator * ry.denominator < ry.numerator * rx.denominator;
+}
+
+bool RatioOps::lte(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
+  Ratio rx = toRatio(x);
+	Ratio ry = toRatio(y);
+	return rx.numerator * ry.denominator <= ry.numerator * rx.denominator;
+}
+
+bool RatioOps::gte(std::shared_ptr<const Number> x, std::shared_ptr<const Number> y) const {
+  Ratio rx = toRatio(x);
+	Ratio ry = toRatio(y);
+	return rx.numerator * ry.denominator >= ry.numerator * rx.denominator;
+}
+
+std::shared_ptr<const Number> RatioOps::negate(std::shared_ptr<const Number> x) const {
+  Ratio rx = toRatio(x);
+  return std::make_shared<const Ratio>(-rx.numerator, rx.denominator);
+}
+
+std::shared_ptr<const Number> RatioOps::inc(std::shared_ptr<const Number> x) const {
+  Ratio rx = toRatio(x);
+  return std::make_shared<const Ratio>(rx.numerator + rx.denominator, rx.denominator);
+}
+
+std::shared_ptr<const Number> RatioOps::dec(std::shared_ptr<const Number> x) const {
+  Ratio rx = toRatio(x);
+  return std::make_shared<const Ratio>(rx.numerator - rx.denominator, rx.denominator);
 }
 
 
 int main() {
   std::cout << "Hello World!\n";
+  Integer x(5);
+  Float y(3.14159);
 }
-
 
 
 
